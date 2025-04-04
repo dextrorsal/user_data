@@ -167,27 +167,45 @@ class WaveTrendIndicator(BaseTorchIndicator):
         # Calculate HLC3 (typical price)
         hlc3 = (high + low + close) / 3.0
         
-        # Calculate EMA and standard deviation
-        ema1 = self.ema(hlc3, self._channel_length)
+        # Initialize arrays
+        ema1 = torch.zeros_like(hlc3)
+        avg_diff = torch.zeros_like(hlc3)
+        wave1 = torch.zeros_like(hlc3)
+        wave2 = torch.zeros_like(hlc3)
         
-        # Calculate absolute price distance
-        abs_diff = torch.abs(hlc3 - ema1)
-        
-        # Calculate average distance (ATR-like calculation)
-        avg_diff = self.ema(abs_diff, self._channel_length)
-        
-        # Normalize using channel multiplier
-        normalized = self.channel_multiplier * avg_diff
-        
-        # Apply limits to avoid division by zero and large values
-        epsilon = 1e-10
-        normalized = torch.clamp(normalized, min=epsilon)
-        
-        # Wave 1 calculation - normalized oscillator
-        wave1 = (hlc3 - ema1) / normalized
-        
-        # Wave 2 calculation - signal line
-        wave2 = self.ema(wave1, self._smoothing_length)
+        # Calculate initial SMA for first period
+        for i in range(self._channel_length, len(hlc3)):
+            # Calculate first EMA
+            if i == self._channel_length:
+                ema1[i] = torch.mean(hlc3[i-self._channel_length:i])
+            else:
+                alpha = 2.0 / (self._channel_length + 1)
+                ema1[i] = alpha * hlc3[i] + (1 - alpha) * ema1[i-1]
+            
+            # Calculate absolute price distance
+            abs_diff = torch.abs(hlc3[i] - ema1[i])
+            
+            # Calculate average distance
+            if i == self._channel_length:
+                avg_diff[i] = torch.mean(torch.abs(hlc3[i-self._channel_length:i] - ema1[i]))
+            else:
+                alpha = 2.0 / (self._channel_length + 1)
+                avg_diff[i] = alpha * abs_diff + (1 - alpha) * avg_diff[i-1]
+            
+            # Normalize using channel multiplier
+            normalized = self.channel_multiplier * avg_diff[i]
+            normalized = torch.clamp(normalized, min=1e-10)
+            
+            # Wave 1 calculation
+            wave1[i] = (hlc3[i] - ema1[i]) / normalized
+            
+            # Wave 2 calculation
+            if i >= self._channel_length + self._smoothing_length:
+                if i == self._channel_length + self._smoothing_length:
+                    wave2[i] = torch.mean(wave1[i-self._smoothing_length:i])
+                else:
+                    alpha = 2.0 / (self._smoothing_length + 1)
+                    wave2[i] = alpha * wave1[i] + (1 - alpha) * wave2[i-1]
         
         # Apply clamps to keep values within reasonable ranges
         wt1 = torch.clamp(wave1, min=-100.0, max=100.0)
@@ -199,13 +217,12 @@ class WaveTrendIndicator(BaseTorchIndicator):
         
         # Calculate crossovers
         valid_mask = ~torch.isnan(wt1) & ~torch.isnan(wt2)
-        buy_signals[valid_mask] = (wt1[valid_mask] > wt2[valid_mask]).to(self.dtype)
-        sell_signals[valid_mask] = (wt1[valid_mask] < wt2[valid_mask]).to(self.dtype)
+        buy_signals[valid_mask] = (wt1[valid_mask] < self.oversold).to(self.dtype)
+        sell_signals[valid_mask] = (wt1[valid_mask] > self.overbought).to(self.dtype)
         
         return {
             'wt1': wt1,
             'wt2': wt2,
-            'wave_trend': wt1,  # Add wave_trend key for compatibility with Lorentzian Classifier
             'buy_signals': buy_signals,
             'sell_signals': sell_signals
         }

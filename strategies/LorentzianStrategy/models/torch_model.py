@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import pandas as pd
+import talib
 from typing import Tuple, List
 from dataclasses import dataclass
 
@@ -109,38 +111,34 @@ class TradingModel(nn.Module):
     
     def prepare_features(self, df: pd.DataFrame) -> torch.Tensor:
         """Prepare features from DataFrame"""
-        # Technical indicators (using ta-lib via pandas_ta)
-        df['rsi'] = df['close'].rolling(window=14).apply(lambda x: talib.RSI(x.values)[-1])
-        df['atr'] = df.ta.atr(length=14)
-        df['supertrend'] = df.ta.supertrend(length=10, multiplier=3.0)['SUPERT_10_3.0']
-        df['ema_fast'] = df.ta.ema(length=8)
-        df['ema_slow'] = df.ta.ema(length=21)
-        df['macd'] = df.ta.macd(fast=12, slow=26)['MACD_12_26_9']
-        df['macd_signal'] = df.ta.macd(fast=12, slow=26)['MACDs_12_26_9']
-        df['macd_hist'] = df.ta.macd(fast=12, slow=26)['MACDh_12_26_9']
-        df['bbands_upper'] = df.ta.bbands(length=20)['BBU_20_2.0']
-        df['bbands_lower'] = df.ta.bbands(length=20)['BBL_20_2.0']
+        # Technical indicators (using ta-lib)
+        df['rsi'] = talib.RSI(df['close'].values)
+        df['atr'] = talib.ATR(df['high'].values, df['low'].values, df['close'].values, timeperiod=14)
+        df['ema_fast'] = talib.EMA(df['close'].values, timeperiod=8)
+        df['ema_slow'] = talib.EMA(df['close'].values, timeperiod=21)
+        df['macd'], df['macd_signal'], df['macd_hist'] = talib.MACD(df['close'].values)
+        df['bbands_upper'], _, df['bbands_lower'] = talib.BBANDS(df['close'].values, timeperiod=20)
         
         # Price changes and volatility
         df['returns'] = df['close'].pct_change()
         df['volatility'] = df['returns'].rolling(window=20).std()
         
         # Volume indicators
-        df['volume_sma'] = df['volume'].rolling(window=20).mean()
+        df['volume_sma'] = talib.SMA(df['volume'].values, timeperiod=20)
         df['volume_ratio'] = df['volume'] / df['volume_sma']
         
         # Momentum
-        df['mom'] = df.ta.mom(length=10)
-        df['roc'] = df.ta.roc(length=10)
+        df['mom'] = talib.MOM(df['close'].values, timeperiod=10)
+        df['roc'] = talib.ROC(df['close'].values, timeperiod=10)
         
         # Trend strength
-        df['adx'] = df.ta.adx(length=14)['ADX_14']
-        df['dmi_plus'] = df.ta.adx(length=14)['DMP_14']
-        df['dmi_minus'] = df.ta.adx(length=14)['DMN_14']
+        df['adx'] = talib.ADX(df['high'].values, df['low'].values, df['close'].values, timeperiod=14)
+        df['dmi_plus'] = talib.PLUS_DI(df['high'].values, df['low'].values, df['close'].values, timeperiod=14)
+        df['dmi_minus'] = talib.MINUS_DI(df['high'].values, df['low'].values, df['close'].values, timeperiod=14)
         
         # Select and normalize features
         feature_columns = [
-            'rsi', 'atr', 'supertrend', 'ema_fast', 'ema_slow',
+            'rsi', 'atr', 'ema_fast', 'ema_slow',
             'macd', 'macd_signal', 'macd_hist', 'bbands_upper', 'bbands_lower',
             'returns', 'volatility', 'volume_ratio', 'mom', 'roc',
             'adx', 'dmi_plus', 'dmi_minus'

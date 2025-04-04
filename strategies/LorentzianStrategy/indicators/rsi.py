@@ -101,9 +101,19 @@ class RSIIndicator(BaseTorchIndicator):
         gains = torch.where(price_diff > 0, price_diff, torch.zeros_like(price_diff))
         losses = torch.where(price_diff < 0, -price_diff, torch.zeros_like(price_diff))
 
-        # Calculate average gains and losses
-        avg_gains = self.torch_ema(gains, self.alpha.item())
-        avg_losses = self.torch_ema(losses, self.alpha.item())
+        # Initialize with SMA for first period
+        avg_gains = torch.zeros_like(close)
+        avg_losses = torch.zeros_like(close)
+        
+        # Calculate initial SMA
+        avg_gains[:self.period] = torch.mean(gains[:self.period])
+        avg_losses[:self.period] = torch.mean(losses[:self.period])
+        
+        # Calculate EMA for remaining periods
+        alpha = 2.0 / (self.period + 1)
+        for i in range(self.period, len(close)):
+            avg_gains[i] = alpha * gains[i] + (1 - alpha) * avg_gains[i-1]
+            avg_losses[i] = alpha * losses[i] + (1 - alpha) * avg_losses[i-1]
 
         # Calculate relative strength and RSI
         rs = avg_gains / (avg_losses + 1e-10)  # Add small epsilon to avoid division by zero

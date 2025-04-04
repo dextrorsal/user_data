@@ -22,11 +22,11 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
-from ....features.technical.indicators.base_torch_indicator import BaseTorchIndicator, TorchIndicatorConfig
-from ....features.technical.indicators.rsi import RSIIndicator
-from ....features.technical.indicators.cci import CCIIndicator
-from ....features.technical.indicators.wave_trend import WaveTrendIndicator
-from ....features.technical.indicators.adx import ADXIndicator
+from ...indicators.base_torch_indicator import BaseTorchIndicator, TorchIndicatorConfig
+from ...indicators.rsi import RSIIndicator
+from ...indicators.cci import CCIIndicator
+from ...indicators.wave_trend import WaveTrendIndicator
+from ...indicators.adx import ADXIndicator
 from contextlib import nullcontext
 
 class Direction(Enum):
@@ -158,26 +158,24 @@ class LorentzianClassifier(nn.Module):
             nn.Dropout(dropout_rate)
         )
         
-        # Attention mechanism
-        self.attention = nn.Sequential(
-            nn.Linear(hidden_size, 1),
-            nn.Sigmoid()
+        # Direction classifier (3 classes: long, short, neutral)
+        self.direction_classifier = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.LeakyReLU(0.1),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_size // 2, 3)  # 3 classes
         )
         
-        # Prototype vectors (learnable centroids)
-        self.positive_prototype = nn.Parameter(torch.randn(hidden_size))
-        self.negative_prototype = nn.Parameter(torch.randn(hidden_size))
-        
-        # Lorentzian distance layer
-        self.lorentzian = LorentzianDistance(sigma=sigma)
-        
-        # Final classification layer
-        self.classifier = nn.Sequential(
-            nn.Linear(2, 1),  # 2 distances (to positive and negative prototypes)
+        # Confidence scorer
+        self.confidence_scorer = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.LeakyReLU(0.1),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_size // 2, 1),
             nn.Sigmoid()
         )
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass through the network
         
@@ -188,29 +186,20 @@ class LorentzianClassifier(nn.Module):
             
         Returns:
         --------
-        torch.Tensor
-            Output probabilities of shape (batch_size, 1)
+        Tuple[torch.Tensor, torch.Tensor]
+            - Direction logits of shape (batch_size, 3) for [long, short, neutral]
+            - Confidence scores of shape (batch_size, 1)
         """
         # Extract features
         features = self.feature_extractor(x)
         
-        # Apply attention
-        attention_weights = self.attention(features)
-        attended_features = features * attention_weights
+        # Get direction logits
+        direction_logits = self.direction_classifier(features)
         
-        # Calculate distances to prototypes
-        positive_distances = self.lorentzian(attended_features, 
-                                            self.positive_prototype.expand(attended_features.size(0), -1))
-        negative_distances = self.lorentzian(attended_features, 
-                                            self.negative_prototype.expand(attended_features.size(0), -1))
+        # Get confidence scores
+        confidence = self.confidence_scorer(features)
         
-        # Concatenate distances
-        distances = torch.stack([positive_distances, negative_distances], dim=1)
-        
-        # Final classification
-        output = self.classifier(distances)
-        
-        return output
+        return direction_logits, confidence
 
     # The original forward method using MLFeatures is moved to this method for backward compatibility
     def forward_with_features(self, features: MLFeatures) -> Dict[str, torch.Tensor]:

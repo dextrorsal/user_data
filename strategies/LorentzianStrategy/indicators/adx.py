@@ -110,23 +110,40 @@ class ADXIndicator(BaseTorchIndicator):
         pos_dm[1:] = torch.where((high_diff > low_diff) & (high_diff > 0), high_diff, torch.zeros_like(high_diff))
         neg_dm[1:] = torch.where((low_diff > high_diff) & (low_diff > 0), low_diff, torch.zeros_like(low_diff))
 
-        # Smooth TR and DM values
-        smoothed_tr = self.ema(tr, self.period)
-        smoothed_pos_dm = self.ema(pos_dm, self.period)
-        smoothed_neg_dm = self.ema(neg_dm, self.period)
+        # Initialize smoothed arrays
+        smoothed_tr = torch.zeros_like(tr)
+        smoothed_pos_dm = torch.zeros_like(pos_dm)
+        smoothed_neg_dm = torch.zeros_like(neg_dm)
+        
+        # Calculate initial values using SMA
+        for i in range(self.period, len(tr)):
+            if i == self.period:
+                smoothed_tr[i] = torch.mean(tr[i-self.period:i])
+                smoothed_pos_dm[i] = torch.mean(pos_dm[i-self.period:i])
+                smoothed_neg_dm[i] = torch.mean(neg_dm[i-self.period:i])
+            else:
+                alpha = 2.0 / (self.period + 1)
+                smoothed_tr[i] = alpha * tr[i] + (1 - alpha) * smoothed_tr[i-1]
+                smoothed_pos_dm[i] = alpha * pos_dm[i] + (1 - alpha) * smoothed_pos_dm[i-1]
+                smoothed_neg_dm[i] = alpha * neg_dm[i] + (1 - alpha) * smoothed_neg_dm[i-1]
 
         # Calculate DI values
         plus_di = (smoothed_pos_dm / (smoothed_tr + 1e-8)) * 100
         minus_di = (smoothed_neg_dm / (smoothed_tr + 1e-8)) * 100
 
-        # Calculate DX and ADX
+        # Calculate DX
         dx = torch.abs(plus_di - minus_di) / (plus_di + minus_di + 1e-8) * 100
-        adx = self.ema(dx, self.period)
         
-        # Replace NaN values with zeros for testing purposes
-        adx = torch.nan_to_num(adx, nan=0.0)
-        plus_di = torch.nan_to_num(plus_di, nan=0.0)
-        minus_di = torch.nan_to_num(minus_di, nan=0.0)
+        # Initialize ADX array
+        adx = torch.zeros_like(dx)
+        
+        # Calculate ADX with proper initialization
+        for i in range(self.period * 2, len(dx)):
+            if i == self.period * 2:
+                adx[i] = torch.mean(dx[i-self.period:i])
+            else:
+                alpha = 2.0 / (self.period + 1)
+                adx[i] = alpha * dx[i] + (1 - alpha) * adx[i-1]
 
         # Generate signals based on ADX threshold
         valid_mask = ~torch.isnan(adx)

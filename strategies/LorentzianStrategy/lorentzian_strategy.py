@@ -11,9 +11,9 @@ from freqtrade.persistence import Trade
 # Import your custom components
 from .models.torch_model import TradingModel, ModelConfig
 from .indicators.wave_trend import WaveTrendIndicator
-from .indicators.rsi import EnhancedRSI
-from .indicators.cci import CustomCCI
-from .indicators.chandelier_exit import ChandelierExit
+from .indicators.rsi import RSIIndicator
+from .indicators.cci import CCIIndicator
+from .indicators.chandelier_exit import ChandelierExitIndicator
 from .indicators.adx import ADXIndicator
 
 logger = logging.getLogger(__name__)
@@ -68,9 +68,9 @@ class LorentzianStrategy(IStrategy):
         
         # Initialize indicators
         self.wave_trend = WaveTrendIndicator()
-        self.enhanced_rsi = EnhancedRSI()
-        self.custom_cci = CustomCCI()
-        self.chandelier = ChandelierExit()
+        self.rsi = RSIIndicator()
+        self.cci = CCIIndicator()
+        self.chandelier = ChandelierExitIndicator()
         self.adx = ADXIndicator()
         
         # Cache for feature data
@@ -81,8 +81,8 @@ class LorentzianStrategy(IStrategy):
         
         # Calculate basic technical indicators
         dataframe = self.wave_trend.populate_indicators(dataframe)
-        dataframe = self.enhanced_rsi.populate_indicators(dataframe)
-        dataframe = self.custom_cci.populate_indicators(dataframe)
+        dataframe = self.rsi.populate_indicators(dataframe)
+        dataframe = self.cci.populate_indicators(dataframe)
         dataframe = self.adx.populate_indicators(dataframe)
         
         # Prepare features for the model
