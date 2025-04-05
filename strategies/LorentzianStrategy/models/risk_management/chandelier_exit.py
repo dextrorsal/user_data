@@ -1,3 +1,22 @@
+"""
+COMPONENT: RISK MANAGEMENT - Chandelier Exit
+
+PyTorch Implementation of Chandelier Exit for Dynamic Stop Loss and Take Profit Management
+
+This module provides a PyTorch-based implementation of the Chandelier Exit indicator,
+which is used for dynamic stop loss and take profit management based on market volatility.
+
+Features:
+- GPU acceleration support
+- ATR-based stop loss calculation
+- Configurable multipliers for different risk profiles
+- Support for both long and short positions
+- Trailing stop loss functionality
+
+This component serves as the RISK MANAGEMENT module in our trading system.
+It helps protect capital by dynamically adjusting exit points based on market conditions.
+"""
+
 import pandas as pd
 import numpy as np
 import torch

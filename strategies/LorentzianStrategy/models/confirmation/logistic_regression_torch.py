@@ -1,4 +1,21 @@
 """
+COMPONENT: CONFIRMATION SIGNAL - Logistic Regression Model
+
+PyTorch Implementation of Logistic Regression for Signal Confirmation
+
+This module provides a PyTorch-based implementation of a Logistic Regression model
+designed to confirm signals from the primary trading model (Lorentzian Classifier).
+
+Features:
+- GPU acceleration support
+- Configurable feature engineering
+- Probability-based signal generation
+- Supports both binary and multi-class classification
+- LBFGS optimizer for efficient training
+
+This component serves as the CONFIRMATION SIGNAL in our trading system.
+It helps reduce false signals by providing a secondary validation of the primary model's predictions.
+
 Enhanced Logistic Regression with PyTorch Implementation
 
 This module provides a PyTorch-based implementation of logistic regression for trading,

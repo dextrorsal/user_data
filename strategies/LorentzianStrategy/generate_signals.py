@@ -1,9 +1,35 @@
 #!/usr/bin/env python3
 """
-Generate trading signals using the Integrated ML Trading System.
+UTILITY COMPONENT: Real-Time Signal Generator
 
-This script loads pre-trained models and generates signals for new market data.
-It can be used for real-time trading signal generation.
+This script provides real-time trading signal generation capabilities for the 
+Integrated ML Trading System. It loads pre-trained models and applies them to 
+new market data to produce actionable trading signals.
+
+Key features:
+- Loads pre-trained Lorentzian ANN, Logistic Regression, and Chandelier Exit models
+- Processes new market data from CSV or Feather files
+- Calculates necessary technical indicators
+- Generates combined trading signals with stop levels
+- Outputs human-readable signal summaries and JSON format for automation
+
+This utility is ideal for:
+1. Real-time trading signal generation in production
+2. Generating signals for recent market data
+3. Testing model performance on new data
+4. Integration with trading bots and execution systems
+
+Command-line usage:
+```
+python generate_signals.py --data path/to/ohlcv.feather --models models/ --output signals.json
+```
+
+Arguments:
+  --data       Path to OHLCV data file (CSV or Feather format)
+  --models     Directory containing pre-trained models
+  --output     Output file for signals (JSON format)
+  --verbose    Print detailed output
+  --last-bars  Number of last bars to analyze (default: 100)
 """
 
 import argparse

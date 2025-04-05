@@ -1,12 +1,23 @@
 """
-Integrated ML Trading System
+MAIN INTEGRATION COMPONENT: Combined ML Trading System
 
-This module combines three powerful components:
-1. Lorentzian ANN for primary signal generation
-2. Logistic Regression for signal confirmation
-3. Chandelier Exit for risk management
+This is the central integration module that combines all three core components:
+1. Lorentzian ANN (Primary Signal Generator) - Identifies potential trading opportunities
+2. Logistic Regression (Signal Confirmation) - Validates signals to reduce false positives
+3. Chandelier Exit (Risk Management) - Manages position exits and protects capital
 
-The system follows the strategy outlined in the technical strategy document.
+The IntegratedMLTrader class orchestrates the interaction between these components,
+creating a complete trading system with signal generation, confirmation, risk management,
+backtesting capabilities, and performance analysis.
+
+Key Functions:
+- Model training and persistence
+- Signal generation combining all three components
+- Backtesting with realistic trade execution
+- Performance metrics calculation
+- Visualization of trading results
+
+This is the recommended entry point for using the complete trading system.
 """
 
 import numpy as np

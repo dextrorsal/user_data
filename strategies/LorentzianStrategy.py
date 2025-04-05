@@ -1,3 +1,18 @@
+"""
+DUPLICATE IMPLEMENTATION: Lorentzian Strategy
+
+This file contains a standalone implementation of the Lorentzian Strategy.
+It duplicates much of the functionality from strategies/LorentzianStrategy/lorentzian_strategy.py.
+
+RECOMMENDATION:
+- Use this file OR the modular implementation in the LorentzianStrategy directory
+- Avoid modifying both implementations to prevent divergence and confusion
+- For a more modular and maintainable approach, prefer the implementation in the LorentzianStrategy directory
+
+This implementation includes only the Lorentzian ANN component without integration of
+Logistic Regression confirmation and Chandelier Exit risk management.
+"""
+
 # pragma pylint: disable=missing-docstring, invalid-name, pointless-string-statement
 # flake8: noqa: F401
 # isort: skip_file

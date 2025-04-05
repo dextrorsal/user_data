@@ -1,12 +1,21 @@
 """
-Configuration for the Integrated ML Trading System
+CENTRAL CONFIGURATION: Integrated ML Trading System Settings
 
-This module defines configuration classes and default values for:
-1. Lorentzian ANN
-2. Logistic Regression
-3. Chandelier Exit
-4. Risk Management
-5. Backtesting
+This module serves as the central configuration hub for the entire integrated ML trading system.
+It defines all parameter settings, default values, and configuration options that control
+the behavior of all system components.
+
+Configuration Categories:
+1. Lorentzian ANN (Primary Signal) - Machine learning model parameters for the main signal generator
+2. Logistic Regression (Confirmation) - Settings for the secondary confirmation model
+3. Chandelier Exit (Risk Management) - Parameters for dynamic stop-loss and take-profit levels
+4. Risk Management - Position sizing, max trades, and other risk control settings
+5. Backtesting - Settings for historical performance evaluation
+
+This file also provides pre-configured setups for different trading styles (conservative, 
+aggressive, default) that can be selected based on user risk preferences.
+
+To use: import the appropriate config object and pass it to the integrated system constructor.
 """
 
 from dataclasses import dataclass

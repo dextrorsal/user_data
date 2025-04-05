@@ -1,3 +1,25 @@
+"""
+MAIN STRATEGY IMPLEMENTATION: Lorentzian ANN Trading Strategy
+
+This is the main implementation file for the Lorentzian ANN trading strategy.
+It integrates the core components (signal generation, confirmation, and risk management)
+into a complete trading system that can be used with Freqtrade.
+
+This implementation currently only uses the Lorentzian ANN classifier, but can be
+extended to integrate the Logistic Regression confirmation model and Chandelier Exit
+risk management component.
+
+To fully integrate all three components (as per user requirement):
+1. Import all three components
+2. Use Lorentzian ANN for primary signals
+3. Confirm signals with Logistic Regression
+4. Manage risk with Chandelier Exit
+
+File Structure:
+- LorentzianANN class: Implementation of the primary signal generator
+- Strategy class: FreqTrade strategy implementation with entry/exit logic
+"""
+
 import logging
 from functools import reduce
 from datetime import datetime

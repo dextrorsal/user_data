@@ -1,3 +1,36 @@
+"""
+ANALYSIS COMPONENT: Lorentzian ANN Model Analyzer and Visualizer
+
+This comprehensive analysis tool provides a complete environment for developing,
+testing, and visualizing the Lorentzian ANN trading model outside of the main
+trading framework. It offers detailed insights into model behavior and performance.
+
+Key capabilities:
+- Complete implementation of the Lorentzian ANN model with all core functions
+- Technical indicator calculation and feature preparation
+- Model training, testing, and incremental learning simulation
+- Comprehensive backtesting with performance metrics
+- Advanced visualization of results with detailed equity curves
+- Model persistence with save/load functionality
+- GPU acceleration for faster processing
+
+This tool supports:
+1. Hyperparameter optimization (lookback period, prediction horizon, k-neighbors)
+2. Comparative analysis across different market regimes
+3. Feature importance analysis and feature engineering
+4. Visualization of prediction accuracy and trade performance
+5. Incremental learning simulation to test model adaptation
+6. Memory usage optimization with batch processing
+
+Usage:
+```python
+python analyze_lorentzian_ann.py
+```
+
+This file serves as both a module that can be imported and a standalone script
+that can be executed directly.
+"""
+
 import numpy as np
 import pandas as pd
 import torch

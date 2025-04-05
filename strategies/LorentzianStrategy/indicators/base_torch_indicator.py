@@ -1,5 +1,20 @@
 """
-Base class for PyTorch-based technical indicators
+BASE COMPONENT: PyTorch Technical Indicators Foundation
+
+This module provides the base class for all PyTorch-based technical indicators used in the trading system.
+It implements common functionality like tensor conversion, device management (CPU/GPU support),
+and automatic mixed precision (AMP) for improved performance.
+
+All technical indicators in the system inherit from this base class to ensure consistent
+behavior and compatible interfaces. The class follows a modular design pattern that allows
+easy extension with new indicators while maintaining the same API.
+
+Key features:
+- GPU acceleration with automatic fallback to CPU
+- Tensor conversion utilities for various input types
+- Common utility functions like EMA calculation
+- Consistent interface for all indicators
+- Error handling and type safety
 """
 
 import torch

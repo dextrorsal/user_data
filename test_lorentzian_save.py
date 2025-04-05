@@ -1,3 +1,19 @@
+"""
+TEST TOOL: Lorentzian Model Save/Load Functionality
+
+This script tests the saving and loading functionality of the Lorentzian ANN model.
+It's used to verify that model persistence works correctly and that model state can be
+properly saved and restored for continuous learning.
+
+Key features:
+1. Model serialization and deserialization
+2. Incremental learning simulation
+3. Testing prediction consistency before and after save/load cycles
+4. Verifying model performance metrics are maintained through persistence
+
+This is a development/testing tool, not part of the production strategy.
+"""
+
 import numpy as np
 import pandas as pd
 import torch

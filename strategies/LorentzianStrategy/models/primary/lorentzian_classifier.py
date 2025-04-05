@@ -1,4 +1,6 @@
 """
+COMPONENT: PRIMARY SIGNAL GENERATOR - Lorentzian Classifier
+
 Enhanced Lorentzian Classifier with PyTorch Implementation
 
 This module provides a PyTorch-based implementation of the Lorentzian Classifier,
@@ -12,6 +14,9 @@ Features:
 - Customizable filters
 - Built-in visualization tools
 - Backtesting metrics
+
+This component serves as the PRIMARY SIGNAL GENERATOR in our trading system.
+It generates the initial trading signals that will be confirmed by a secondary model.
 """
 
 import numpy as np

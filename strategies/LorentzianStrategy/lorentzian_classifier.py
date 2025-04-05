@@ -1,8 +1,44 @@
 """
-Lorentzian ANN Classifier
+PRIMARY COMPONENT: Standalone Lorentzian Classifier
 
-This module implements a classifier using Approximate Nearest Neighbors with Lorentzian distance,
-similar to TradingView's approach. It's designed for market prediction and technical analysis.
+This is a standalone implementation of the Lorentzian ANN (Approximate Nearest Neighbors) 
+classifier for signal generation in trading systems. It uses a novel Lorentzian distance 
+metric to find similar historical price patterns and predict future price movements.
+
+Key features:
+- GPU-accelerated implementation with PyTorch
+- K-nearest neighbors classification with Lorentzian distance
+- Market regime and volatility filtering
+- Model persistence (save/load functionality)
+- Incremental learning capability (can update with new data)
+- Efficient batch processing for large datasets
+
+This standalone version can be used for:
+1. Individual backtesting and analysis
+2. Development and testing of the core algorithm
+3. Educational purposes to understand the Lorentzian distance approach
+4. Quick prototyping before integration with other components
+
+This is one of two implementations of the Lorentzian classifier in the codebase.
+The other is located in `models/primary/lorentzian_classifier.py` and is designed
+for integration with the full trading system.
+
+Usage:
+```python
+# Initialize model
+model = LorentzianANN(lookback_bars=50, prediction_bars=4, k_neighbors=20)
+
+# Prepare features and fit model
+features = prepare_features(df)
+prices = df['close'].values
+model.fit(features, prices)
+
+# Generate predictions
+predictions = model.predict(features)
+
+# Save model for later use
+model.save_model('lorentzian_model.pt')
+```
 """
 
 import numpy as np

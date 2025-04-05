@@ -1,9 +1,41 @@
 #!/usr/bin/env python3
 """
-Run a backtest of the integrated ML trading system.
+TESTING COMPONENT: Integrated Backtesting System
 
-This script loads data, configures the integrated ML trader, 
-trains the models, generates signals, and runs a backtest.
+This script provides a complete backtesting environment for the Integrated ML Trading System.
+It combines all three core components (Lorentzian ANN, Logistic Regression, and Chandelier Exit)
+to simulate trading on historical data and evaluate performance metrics.
+
+Key features:
+- Support for different configuration profiles (default, aggressive, conservative)
+- Comprehensive backtesting with realistic trade execution
+- Performance metrics calculation and visualization
+- GPU acceleration support
+- Model training, saving and loading capabilities
+- Trading parameter optimization
+
+This backtester is ideal for:
+1. Evaluating overall system performance on historical data
+2. Comparing different configuration profiles
+3. Testing model stability and consistency
+4. Analyzing risk-reward characteristics
+5. Optimizing trading parameters
+
+Command-line usage:
+```
+python run_backtest.py --data path/to/ohlcv.feather --config default --periods 10000 --capital 10000
+```
+
+Arguments:
+  --data         Path to OHLCV data file (Feather format)
+  --config       Configuration profile to use (default, aggressive, conservative)
+  --periods      Number of periods to use for testing
+  --capital      Initial capital for backtest
+  --leverage     Leverage to use for trades
+  --gpu          Use GPU acceleration
+  --save-models  Save models after training
+  --load-models  Load pre-trained models
+  --output       Output directory for results
 """
 
 import argparse
