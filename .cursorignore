@@ -1,0 +1,21 @@
+# ignore the model weights
+*.pth
+*.pt
+*.pkl
+*.pickle
+*.pickle.gz
+*.pickle.bz2
+
+# ignore the data
+*.csv
+
+#ignore the pycache
+__pycache__
+*.pyc
+*.pyc.gz
+
+#ignore the png files
+*.png
+
+#ignore notebook files
+*.ipynb
