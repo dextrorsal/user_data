@@ -1,0 +1,16 @@
+{
+    "python.terminal.activateEnvironment": true,
+    "python.condaPath": "conda",
+    "python.defaultInterpreterPath": "~/anaconda3/envs/freqtrade/bin/python",
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.profiles.linux": {
+        "bash": {
+            "path": "bash",
+            "icon": "terminal-bash",
+            "args": ["-c", "conda activate freqtrade && bash"]
+        }
+    },
+    "python.analysis.extraPaths": [
+        "~/anaconda3/envs/freqtrade/lib/python3.9/site-packages/"
+    ]
+}
