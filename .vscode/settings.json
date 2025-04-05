@@ -1,16 +1,22 @@
 {
+    "python.defaultInterpreterPath": "/home/dex/anaconda3/envs/freqtrade/bin/python",
     "python.terminal.activateEnvironment": true,
-    "python.condaPath": "conda",
-    "python.defaultInterpreterPath": "~/anaconda3/envs/freqtrade/bin/python",
+    "python.condaPath": "/home/dex/anaconda3/bin/conda",
     "terminal.integrated.defaultProfile.linux": "bash",
-    "terminal.integrated.profiles.linux": {
-        "bash": {
-            "path": "bash",
-            "icon": "terminal-bash",
-            "args": ["-c", "conda activate freqtrade && bash"]
-        }
+    "terminal.integrated.env.linux": {
+        "CONDA_DEFAULT_ENV": "freqtrade"
     },
+    "terminal.integrated.shellIntegration.enabled": true,
+    "terminal.integrated.inheritEnv": true,
+    "terminal.integrated.shellArgs.linux": ["-l"],
     "python.analysis.extraPaths": [
-        "~/anaconda3/envs/freqtrade/lib/python3.9/site-packages/"
-    ]
+        "/home/dex/anaconda3/envs/freqtrade/lib/python3.9/site-packages/"
+    ],
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.linting.flake8Enabled": true,
+    "python.formatting.provider": "autopep8",
+    "editor.formatOnSave": true,
+    "python.terminal.executeInFileDir": true,
+    "jupyter.notebookFileRoot": "${workspaceFolder}"
 }
