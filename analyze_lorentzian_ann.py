@@ -1,16 +1,18 @@
-import sys
-import pandas as pd
 import numpy as np
+import pandas as pd
 import torch
 import matplotlib.pyplot as plt
+import time
+import os
+import gc
+import sys
 from pathlib import Path
-from sklearn.preprocessing import MinMaxScaler
+
+# Import indicators
 from strategies.LorentzianStrategy.indicators.rsi import RSIIndicator
 from strategies.LorentzianStrategy.indicators.wave_trend import WaveTrendIndicator
 from strategies.LorentzianStrategy.indicators.cci import CCIIndicator
 from strategies.LorentzianStrategy.indicators.adx import ADXIndicator
-import time
-import gc
 
 # Set up GPU device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -50,6 +52,16 @@ class LorentzianANN:
         # These will store our historical data
         self.feature_arrays = None
         self.labels = None
+        
+        # Path for model persistence
+        self.model_dir = Path("models")
+        self.model_path = self.model_dir / "lorentzian_ann.pt"
+        self.is_fitted = False
+        
+        # Create models directory if it doesn't exist
+        if not self.model_dir.exists():
+            self.model_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Created directory: {self.model_dir}")
         
     def lorentzian_distance(self, features, historical_features):
         """
@@ -112,7 +124,10 @@ class LorentzianANN:
         return features[:len(labels)], labels
         
     def fit(self, features, prices):
-        """Store the training data for ANN lookup"""
+        """
+        Use ANN (Approximate Nearest Neighbors) to fit the model
+        This stores the historical feature arrays for later lookup
+        """
         # Convert to tensors if they aren't already
         if not isinstance(features, torch.Tensor):
             features = torch.tensor(features, dtype=torch.float32)
@@ -122,9 +137,10 @@ class LorentzianANN:
         # Generate training data
         features, labels = self.generate_training_data(features, prices)
         
-        # Store for future lookup
+        # Store for lookup
         self.feature_arrays = features.to(device)
         self.labels = labels.to(device)
+        self.is_fitted = True  # Set this flag to indicate the model is fitted
         
         return self
     
@@ -184,6 +200,138 @@ class LorentzianANN:
         print("\nPrediction complete!")
         
         return final_predictions
+
+    def save_model(self, path=None):
+        """Save model state to file"""
+        if path is None:
+            path = self.model_path
+            
+        if not self.is_fitted:
+            print("Model not fitted yet, nothing to save")
+            return False
+        
+        # Create a dictionary containing all necessary components
+        save_dict = {
+            'feature_arrays': self.feature_arrays.cpu(),
+            'labels': self.labels.cpu(),
+            'scaler': self.scaler,
+            'config': {
+                'lookback_bars': self.lookback_bars,
+                'prediction_bars': self.prediction_bars,
+                'k_neighbors': self.k_neighbors,
+                'use_regime_filter': self.use_regime_filter,
+                'use_volatility_filter': self.use_volatility_filter,
+                'use_adx_filter': self.use_adx_filter
+            },
+            'metadata': {
+                'date_saved': pd.Timestamp.now().isoformat(),
+                'samples': len(self.feature_arrays)
+            }
+        }
+        
+        try:
+            # Make sure directory exists
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            
+            # Save model
+            torch.save(save_dict, path)
+            print(f"Model saved to {path}")
+            print(f"Saved {len(self.feature_arrays)} samples with {len(self.scaler)} features")
+            return True
+        except Exception as e:
+            print(f"Error saving model: {str(e)}")
+            return False
+    
+    def load_model(self, path=None):
+        """Load model state from file"""
+        if path is None:
+            path = self.model_path
+            
+        if not os.path.exists(path):
+            print(f"Model file {path} does not exist")
+            return False
+            
+        try:
+            # Load with weights_only=False to allow loading complex objects
+            # Note: Only use this with models from trusted sources
+            checkpoint = torch.load(path, map_location='cpu', weights_only=False)
+            
+            # Load configuration
+            config = checkpoint['config']
+            self.lookback_bars = config['lookback_bars']
+            self.prediction_bars = config['prediction_bars']
+            self.k_neighbors = config['k_neighbors']
+            self.use_regime_filter = config['use_regime_filter']
+            self.use_volatility_filter = config['use_volatility_filter']
+            self.use_adx_filter = config['use_adx_filter']
+            
+            # Load model data - make sure to move to the correct device
+            self.feature_arrays = checkpoint['feature_arrays'].to(device)
+            self.labels = checkpoint['labels'].to(device)
+            self.scaler = checkpoint['scaler']
+            
+            # Print metadata if available
+            if 'metadata' in checkpoint:
+                metadata = checkpoint['metadata']
+                print(f"Model saved on: {metadata.get('date_saved', 'Unknown')}")
+                print(f"Samples in model: {metadata.get('samples', 'Unknown')}")
+            
+            self.is_fitted = True
+            print(f"Model loaded from {path} with {len(self.feature_arrays)} samples")
+            print(f"Configuration: lookback={self.lookback_bars}, prediction={self.prediction_bars}, k={self.k_neighbors}")
+            
+            return True
+        except Exception as e:
+            print(f"Error loading model: {str(e)}")
+            return False
+    
+    def update_model(self, new_features, new_prices, max_samples=20000):
+        """
+        Update the model with new data without retraining from scratch
+        This allows the model to adapt to new market conditions
+        """
+        if not self.is_fitted:
+            print("Model not fitted yet, using initial fit instead")
+            return self.fit(new_features, new_prices)
+            
+        # Convert new data to tensors
+        if not isinstance(new_features, torch.Tensor):
+            new_features = torch.tensor(new_features, dtype=torch.float32)
+        if not isinstance(new_prices, torch.Tensor):
+            new_prices = torch.tensor(new_prices, dtype=torch.float32)
+            
+        # Move to device
+        new_features = new_features.to(device)
+        new_prices = new_prices.to(device)
+        
+        # Generate labels for new data
+        new_features, new_labels = self.generate_training_data(new_features, new_prices)
+        
+        print(f"Adding {len(new_features)} new samples to model")
+        
+        # Combine with existing data (keeping most recent samples)
+        if len(self.feature_arrays) + len(new_features) > max_samples:
+            # Keep most recent data
+            keep_samples = max_samples - len(new_features)
+            
+            print(f"Limiting model to {max_samples} samples (removing {len(self.feature_arrays) - keep_samples} old samples)")
+            
+            self.feature_arrays = self.feature_arrays[-keep_samples:]
+            self.labels = self.labels[-keep_samples:]
+        
+        # Make sure both tensors are on the same device before concatenating
+        self.feature_arrays = self.feature_arrays.to(device)
+        self.labels = self.labels.to(device)
+        new_features = new_features.to(device)
+        new_labels = new_labels.to(device)
+        
+        # Add new data
+        self.feature_arrays = torch.cat([self.feature_arrays, new_features])
+        self.labels = torch.cat([self.labels, new_labels])
+        
+        print(f"Model updated: {len(self.feature_arrays)} total samples")
+        
+        return self
 
 def prepare_indicators(df):
     """Add technical indicators using custom PyTorch implementations"""
@@ -297,23 +445,23 @@ def apply_filters(df, adx_threshold=20.0, regime_threshold=-0.1):
     return df[combined_mask]
 
 def prepare_features(df):
-    """Prepare features for the model"""
-    # Following TradingView's approach with the exact same features
-    features = np.column_stack([
-        df['rsi_14'].values,  # Feature 1: RSI(14)
-        df['wt1'].values,     # Feature 2: WaveTrend
-        df['cci'].values,     # Feature 3: CCI
-        df['adx'].values,     # Feature 4: ADX
-        df['rsi_9'].values    # Feature 5: RSI(9)
-    ])
+    """Prepare and scale features for model input"""
+    # Select features
+    feature_cols = ['rsi_14', 'wt1', 'wt2', 'cci', 'adx']  # Customize this list
     
-    # Scale features to [0, 1] range
-    scaler = MinMaxScaler()
-    features = scaler.fit_transform(features)
+    # Simple standardization (mean=0, std=1)
+    scaler = {}
+    scaled_features = np.zeros((len(df), len(feature_cols)))
     
-    return features, scaler
+    for i, col in enumerate(feature_cols):
+        mean, std = df[col].mean(), df[col].std()
+        scaler[col] = {'mean': mean, 'std': std}
+        scaled_features[:, i] = (df[col].values - mean) / (std if std > 0 else 1)
+    
+    print(f"Prepared features with shape: {scaled_features.shape}")
+    return scaled_features, scaler
 
-def train_lorentzian_ann(df, lookback_bars=50, prediction_bars=4, k_neighbors=20):
+def train_lorentzian_ann(df, lookback_bars=50, prediction_bars=4, k_neighbors=20, model_path=None):
     """Train the Lorentzian ANN model"""
     try:
         # Prepare features
@@ -326,11 +474,7 @@ def train_lorentzian_ann(df, lookback_bars=50, prediction_bars=4, k_neighbors=20
         print(f"Predicting {prediction_bars} bars into the future")
         print(f"Using {k_neighbors} nearest neighbors")
         
-        # Free up memory
-        gc.collect()
-        torch.cuda.empty_cache()
-        
-        # Initialize model before loading data
+        # Initialize model
         model = LorentzianANN(
             lookback_bars=lookback_bars,
             prediction_bars=prediction_bars,
@@ -340,41 +484,35 @@ def train_lorentzian_ann(df, lookback_bars=50, prediction_bars=4, k_neighbors=20
             use_adx_filter=True
         )
         
-        # Convert to tensors - use float16 to reduce memory usage
-        features_tensor = torch.tensor(features, dtype=torch.float16).to(device)
-        prices_tensor = torch.tensor(close_prices, dtype=torch.float16).to(device)
-        
-        # Fit the model
-        model.fit(features_tensor, prices_tensor)
+        # Check if we should load a previous model
+        if model_path is not None and os.path.exists(model_path):
+            print(f"Found existing model at {model_path}, loading...")
+            model.load_model(model_path)
+            
+            # Update with new data
+            print("Updating model with new data...")
+            features_tensor = torch.tensor(features, dtype=torch.float32).to(device)
+            prices_tensor = torch.tensor(close_prices, dtype=torch.float32).to(device)
+            model.scaler = scaler  # Update scaler with latest data
+            model.update_model(features_tensor, prices_tensor)
+        else:
+            print("Training new model...")
+            # Convert to tensors
+            features_tensor = torch.tensor(features, dtype=torch.float32).to(device)
+            prices_tensor = torch.tensor(close_prices, dtype=torch.float32).to(device)
+            
+            # Fit the model
+            model.scaler = scaler
+            model.fit(features_tensor, prices_tensor)
         
         # Free memory before prediction
-        gc.collect()
         torch.cuda.empty_cache()
         
-        # Generate predictions in batches
-        batch_size = 500  # Use smaller batches
-        all_predictions = []
+        # Generate predictions
+        predictions = model.predict(features_tensor)
         
-        for start_idx in range(0, len(features), batch_size):
-            end_idx = min(start_idx + batch_size, len(features))
-            print(f"Generating predictions for batch {start_idx}-{end_idx}")
-            
-            # Get batch features
-            batch_features = features[start_idx:end_idx]
-            batch_tensor = torch.tensor(batch_features, dtype=torch.float16).to(device)
-            
-            # Get predictions for this batch
-            batch_predictions = model.predict(batch_tensor)
-            
-            # Move to CPU
-            all_predictions.append(batch_predictions.cpu().numpy())
-            
-            # Free memory
-            del batch_tensor
-            torch.cuda.empty_cache()
-        
-        # Combine predictions from all batches
-        predictions = np.concatenate(all_predictions)
+        # Move back to CPU for analysis
+        predictions = predictions.cpu().numpy()
         
         # Store predictions in the dataframe
         df['signal'] = predictions
@@ -386,14 +524,19 @@ def train_lorentzian_ann(df, lookback_bars=50, prediction_bars=4, k_neighbors=20
         for signal, count in distribution.items():
             signal_name = "LONG" if signal == 1 else "SHORT" if signal == -1 else "NEUTRAL"
             print(f"{signal_name}: {count} ({count/len(predictions)*100:.2f}%)")
+        
+        # Save model state if path is provided
+        if model_path is not None:
+            print("Saving model state...")
+            model.save_model(model_path)
             
-        return df, model, scaler
+        return df, model
         
     except Exception as e:
         print(f"Error in train_lorentzian_ann: {str(e)}")
         import traceback
         print(traceback.format_exc())
-        return None, None, None
+        return None, None
 
 def calculate_metrics(df):
     """Calculate trading metrics"""
@@ -478,25 +621,33 @@ def main():
     df['datetime'] = pd.to_datetime(df['date'])
     df.set_index('datetime', inplace=True)
     
+    # Reduce dataset size for faster testing
+    test_size = 10000  # Adjust as needed
+    print(f"Original data size: {len(df)}")
+    df = df.iloc[-test_size:]
+    print(f"Reduced data size: {len(df)}")
+    
     # Prepare indicators
     df = prepare_indicators(df)
     
-    # Apply filters (optional, you can skip this to use all data)
-    # df = apply_filters(df, adx_threshold=20.0, regime_threshold=-0.1)
+    # Define model path
+    model_path = Path("models/lorentzian_model.pt")
     
-    # Train model
-    df, model, scaler = train_lorentzian_ann(
+    # Train model with weight persistence
+    df, model = train_lorentzian_ann(
         df, 
         lookback_bars=50,     # TradingView default
         prediction_bars=4,    # TradingView default
-        k_neighbors=20        # Number of neighbors to consider
+        k_neighbors=20,       # Number of neighbors to consider
+        model_path=model_path
     )
     
-    # Calculate metrics
-    metrics = calculate_metrics(df)
-    
-    # Plot results
-    plot_results(df)
+    if df is not None:
+        # Calculate metrics
+        metrics = calculate_metrics(df)
+        
+        # Plot results
+        plot_results(df)
     
     elapsed_time = time.time() - start_time
     print(f"\nTotal execution time: {elapsed_time:.2f} seconds")

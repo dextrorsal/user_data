@@ -4,17 +4,17 @@ from datetime import datetime
 import numpy as np
 import torch
 from pandas import DataFrame
+import os
+from pathlib import Path
+import sys
+import pandas as pd
 
 from freqtrade.strategy import IStrategy, IntParameter, DecimalParameter
 from freqtrade.persistence import Trade
 
-# Import your custom components
-from .models.torch_model import TradingModel, ModelConfig
-from .indicators.wave_trend import WaveTrendIndicator
-from .indicators.rsi import RSIIndicator
-from .indicators.cci import CCIIndicator
-from .indicators.chandelier_exit import ChandelierExitIndicator
-from .indicators.adx import ADXIndicator
+# Import the Lorentzian ANN model
+sys.path.append(str(Path(__file__).parent.parent.parent))  # Add user_data to path
+from analyze_lorentzian_ann import LorentzianANN, prepare_indicators
 
 logger = logging.getLogger(__name__)
 
@@ -41,109 +41,120 @@ class LorentzianStrategy(IStrategy):
     timeframe = '5m'
     
     # Hyperopt parameters
-    lookback_period = IntParameter(20, 40, default=30, space="buy", optimize=True)
-    confidence_threshold = DecimalParameter(0.6, 0.9, default=0.7, space="buy", optimize=True)
+    lookback_bars = IntParameter(30, 60, default=50, space="buy", optimize=True)
+    prediction_bars = IntParameter(2, 6, default=4, space="buy", optimize=True)
+    k_neighbors = IntParameter(10, 30, default=20, space="buy", optimize=True)
     
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         
-        # Initialize PyTorch model
-        model_config = ModelConfig(
-            input_size=20,
-            hidden_size=64,
-            num_layers=2,
-            dropout=0.2
+        # Initialize device
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        logger.info(f"Using device: {self.device}")
+        
+        # Initialize Lorentzian ANN model
+        self.model = LorentzianANN(
+            lookback_bars=self.lookback_bars.value,
+            prediction_bars=self.prediction_bars.value,
+            k_neighbors=self.k_neighbors.value,
+            use_regime_filter=True,
+            use_volatility_filter=True,
+            use_adx_filter=True
         )
-        self.model = TradingModel(model_config)
         
         # Load model weights if available
-        try:
-            self.model.load_state_dict(torch.load(
-                "user_data/models/lorentzian_model.pth",
-                map_location=self.model.device
-            ))
-            logger.info("Loaded existing model weights")
-        except FileNotFoundError:
-            logger.warning("No pre-trained model found, using untrained model")
+        model_path = Path("models/lorentzian_model.pt")
+        if os.path.exists(model_path):
+            try:
+                self.model.load_model(model_path)
+                logger.info(f"Loaded existing model from {model_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load model: {str(e)}")
+        else:
+            logger.warning(f"No pre-trained model found at {model_path}")
         
-        # Initialize indicators
-        self.wave_trend = WaveTrendIndicator()
-        self.rsi = RSIIndicator()
-        self.cci = CCIIndicator()
-        self.chandelier = ChandelierExitIndicator()
-        self.adx = ADXIndicator()
-        
-        # Cache for feature data
-        self._feature_cache = {}
+        # Cache for indicator data
+        self._indicator_cache = {}
     
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """Calculate all technical indicators and model predictions"""
         
-        # Calculate basic technical indicators
-        dataframe = self.wave_trend.populate_indicators(dataframe)
-        dataframe = self.rsi.populate_indicators(dataframe)
-        dataframe = self.cci.populate_indicators(dataframe)
-        dataframe = self.adx.populate_indicators(dataframe)
+        pair = metadata['pair']
         
-        # Prepare features for the model
-        features = self.prepare_features(dataframe)
+        # Deep copy dataframe to avoid modifying the original
+        df = dataframe.copy()
         
-        # Get model predictions
-        if len(features) > 0:
-            with torch.no_grad():
-                direction_logits, confidence = self.model(features)
+        # Add date/time columns for compatibility
+        df['date'] = df['date'].astype(np.int64) // 1000000  # Convert to UNIX timestamp
+        df['datetime'] = pd.to_datetime(df['date'], unit='s')
+        
+        # Calculate indicators
+        try:
+            # Check if we have calculated indicators for this pair recently
+            if pair in self._indicator_cache:
+                df_with_indicators = self._indicator_cache[pair]
+                # If we have more data, just calculate for the new data
+                if len(df) > len(df_with_indicators):
+                    new_data = df.iloc[len(df_with_indicators):].copy()
+                    new_data_with_indicators = prepare_indicators(new_data)
+                    df_with_indicators = pd.concat([df_with_indicators, new_data_with_indicators])
+                    self._indicator_cache[pair] = df_with_indicators
+            else:
+                # Calculate indicators for all data
+                df_with_indicators = prepare_indicators(df)
+                self._indicator_cache[pair] = df_with_indicators
+            
+            # Add model predictions
+            if self.model.is_fitted:
+                # Prepare features for prediction
+                feature_cols = ['rsi_14', 'wt1', 'wt2', 'cci', 'adx']
+                features = df_with_indicators[feature_cols].values
                 
-                # Convert predictions to numpy
-                direction_probs = torch.softmax(direction_logits, dim=1).cpu().numpy()
-                confidence = confidence.cpu().numpy()
+                # Scale features
+                if self.model.scaler:
+                    scaled_features = np.zeros((len(features), len(feature_cols)))
+                    for i, col in enumerate(feature_cols):
+                        if col in self.model.scaler:
+                            mean = self.model.scaler[col]['mean']
+                            std = self.model.scaler[col]['std']
+                            scaled_features[:, i] = (features[:, i] - mean) / (std if std > 0 else 1)
+                else:
+                    # Simple standardization if no scaler available
+                    scaled_features = (features - np.mean(features, axis=0)) / (np.std(features, axis=0) + 1e-8)
+                
+                # Convert to tensor
+                features_tensor = torch.tensor(scaled_features, dtype=torch.float32).to(self.device)
+                
+                # Get predictions
+                with torch.no_grad():
+                    predictions = self.model.predict(features_tensor)
                 
                 # Add predictions to dataframe
-                dataframe['dl_long_prob'] = direction_probs[:, 0]
-                dataframe['dl_short_prob'] = direction_probs[:, 1]
-                dataframe['dl_neutral_prob'] = direction_probs[:, 2]
-                dataframe['dl_confidence'] = confidence
-        
-        # Calculate Chandelier Exit stops
-        long_stops, short_stops = self.chandelier.calculate_stops(dataframe)
-        dataframe['long_stop'] = long_stops
-        dataframe['short_stop'] = short_stops
-        
+                dataframe['signal'] = predictions.cpu().numpy()
+            else:
+                # No model available, use neutral signal
+                dataframe['signal'] = 0
+                
+        except Exception as e:
+            logger.error(f"Error calculating indicators/predictions: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            dataframe['signal'] = 0
+            
         return dataframe
     
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """Generate entry signals"""
         
-        conditions_long = [
-            # Strong long signal from model
-            (dataframe['dl_long_prob'] > dataframe['dl_short_prob']),
-            (dataframe['dl_long_prob'] > dataframe['dl_neutral_prob']),
-            (dataframe['dl_confidence'] > self.confidence_threshold.value),
-            
-            # Confirm with technical indicators
-            (dataframe['rsi'] < 70),  # Not overbought
-            (dataframe['adx'] > 25),  # Strong trend
-            (dataframe['wave_trend'] > 0),  # Bullish wave trend
-        ]
-        
-        conditions_short = [
-            # Strong short signal from model
-            (dataframe['dl_short_prob'] > dataframe['dl_long_prob']),
-            (dataframe['dl_short_prob'] > dataframe['dl_neutral_prob']),
-            (dataframe['dl_confidence'] > self.confidence_threshold.value),
-            
-            # Confirm with technical indicators
-            (dataframe['rsi'] > 30),  # Not oversold
-            (dataframe['adx'] > 25),  # Strong trend
-            (dataframe['wave_trend'] < 0),  # Bearish wave trend
-        ]
-        
+        # Long entries
         dataframe.loc[
-            reduce(lambda x, y: x & y, conditions_long),
+            (dataframe['signal'] == 1),  # Model predicts long
             'enter_long'
         ] = 1
         
+        # Short entries
         dataframe.loc[
-            reduce(lambda x, y: x & y, conditions_short),
+            (dataframe['signal'] == -1),  # Model predicts short
             'enter_short'
         ] = 1
         
@@ -152,63 +163,19 @@ class LorentzianStrategy(IStrategy):
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """Generate exit signals"""
         
-        # Exit long positions
+        # Exit long when model predicts short
         dataframe.loc[
-            (
-                (dataframe['dl_short_prob'] > dataframe['dl_long_prob']) |
-                (dataframe['close'] < dataframe['long_stop'])
-            ),
+            (dataframe['signal'] == -1),
             'exit_long'
         ] = 1
         
-        # Exit short positions
+        # Exit short when model predicts long
         dataframe.loc[
-            (
-                (dataframe['dl_long_prob'] > dataframe['dl_short_prob']) |
-                (dataframe['close'] > dataframe['short_stop'])
-            ),
+            (dataframe['signal'] == 1),
             'exit_short'
         ] = 1
         
         return dataframe
-    
-    def custom_stoploss(self, pair: str, trade: Trade, current_time: datetime,
-                       current_rate: float, current_profit: float, **kwargs) -> float:
-        """Dynamic stoploss using Chandelier Exit"""
-        
-        # Get dataframe for this pair
-        dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
-        last_candle = dataframe.iloc[-1]
-        
-        # Use Chandelier Exit stops
-        if trade.is_short:
-            return (last_candle['short_stop'] - current_rate) / current_rate
-        
-        return (current_rate - last_candle['long_stop']) / current_rate
-    
-    def prepare_features(self, dataframe: DataFrame) -> torch.Tensor:
-        """Prepare features for the PyTorch model"""
-        
-        # Select feature columns
-        feature_columns = [
-            'rsi', 'wave_trend', 'cci', 'adx',
-            'close', 'volume', 'high', 'low'
-        ]
-        
-        # Create sequences
-        sequences = []
-        for i in range(len(dataframe) - self.lookback_period.value + 1):
-            sequence = dataframe[feature_columns].iloc[i:i+self.lookback_period.value].values
-            sequences.append(sequence)
-        
-        if len(sequences) == 0:
-            return torch.tensor([])
-        
-        # Convert to tensor and normalize
-        features = torch.tensor(sequences, dtype=torch.float32)
-        features = (features - features.mean()) / (features.std() + 1e-8)
-        
-        return features.to(self.model.device)
     
     def bot_start(self, **kwargs) -> None:
         """Called when bot starts"""
@@ -217,4 +184,4 @@ class LorentzianStrategy(IStrategy):
     def bot_cleanup(self) -> None:
         """Called when bot stops"""
         # Clear cache
-        self._feature_cache.clear() 
+        self._indicator_cache.clear() 
