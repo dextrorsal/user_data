@@ -42,10 +42,10 @@ import sys
 from pathlib import Path
 
 # Import indicators
-from strategies.LorentzianStrategy.indicators.rsi import RSIIndicator
-from strategies.LorentzianStrategy.indicators.wave_trend import WaveTrendIndicator
-from strategies.LorentzianStrategy.indicators.cci import CCIIndicator
-from strategies.LorentzianStrategy.indicators.adx import ADXIndicator
+from strategies.features.rsi import RSIIndicator
+from strategies.features.wave_trend import WaveTrendIndicator
+from strategies.features.cci import CCIIndicator
+from strategies.features.adx import ADXIndicator
 
 # Set up GPU device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -599,31 +599,52 @@ def train_lorentzian_ann(
 
 def calculate_metrics(df):
     """Calculate trading metrics"""
+    # Ensure arrays are aligned
+    df = df.copy()
+
     # Calculate returns based on signals
     df["position"] = df["signal"].shift(1).fillna(0)  # Position at the start of the bar
     df["returns"] = df["close"].pct_change()
     df["strategy_returns"] = df["position"] * df["returns"]
 
-    # Calculate metrics
-    total_trades = (df["position"].diff() != 0).sum()
-    winning_trades = (df["strategy_returns"] > 0).sum()
-    losing_trades = (df["strategy_returns"] < 0).sum()
+    # Drop any NaN values to avoid calculation issues
+    df = df.dropna(subset=["position", "returns", "strategy_returns"])
 
+    # Calculate trade metrics
+    trades = df["position"].diff()
+    total_trades = (trades != 0).sum()
+
+    # Calculate winning and losing trades
+    trade_returns = df.groupby((trades != 0).cumsum())["strategy_returns"].sum()
+    winning_trades = (trade_returns > 0).sum()
+    losing_trades = (trade_returns < 0).sum()
+
+    # Calculate win rate and average returns
     win_rate = winning_trades / total_trades if total_trades > 0 else 0
-    avg_win = (
-        df.loc[df["strategy_returns"] > 0, "strategy_returns"].mean()
-        if winning_trades > 0
-        else 0
-    )
-    avg_loss = (
-        df.loc[df["strategy_returns"] < 0, "strategy_returns"].mean()
-        if losing_trades > 0
-        else 0
-    )
+    avg_win = trade_returns[trade_returns > 0].mean() if winning_trades > 0 else 0
+    avg_loss = trade_returns[trade_returns < 0].mean() if losing_trades > 0 else 0
 
-    # Calculate cumulative returns
+    # Calculate risk metrics
     df["cumulative_returns"] = (1 + df["strategy_returns"]).cumprod()
-    final_return = df["cumulative_returns"].iloc[-1] if len(df) > 0 else 1.0
+    peak = df["cumulative_returns"].expanding().max()
+    drawdown = df["cumulative_returns"] / peak - 1
+    max_drawdown = drawdown.min()
+
+    # Calculate Sharpe Ratio (annualized)
+    risk_free_rate = 0.02  # 2% annual risk-free rate
+    excess_returns = (
+        df["strategy_returns"] - risk_free_rate / 252
+    )  # Daily risk-free rate
+    sharpe_ratio = np.sqrt(252) * excess_returns.mean() / excess_returns.std()
+
+    # Calculate Sortino Ratio (annualized)
+    downside_returns = df.loc[df["strategy_returns"] < 0, "strategy_returns"]
+    sortino_ratio = np.sqrt(252) * excess_returns.mean() / downside_returns.std()
+
+    # Calculate profit factor
+    gross_profits = df.loc[df["strategy_returns"] > 0, "strategy_returns"].sum()
+    gross_losses = abs(df.loc[df["strategy_returns"] < 0, "strategy_returns"].sum())
+    profit_factor = gross_profits / gross_losses if gross_losses != 0 else float("inf")
 
     # Print metrics
     print("\nPerformance Metrics:")
@@ -633,12 +654,9 @@ def calculate_metrics(df):
     print(f"Win Rate: {win_rate:.2%}")
     print(f"Average Win: {avg_win:.2%}")
     print(f"Average Loss: {avg_loss:.2%}")
-    print(f"Final Return: {final_return - 1:.2%}")
-
-    # Calculate max drawdown
-    peak = df["cumulative_returns"].cummax()
-    drawdown = df["cumulative_returns"] / peak - 1
-    max_drawdown = drawdown.min()
+    print(f"Profit Factor: {profit_factor:.2f}")
+    print(f"Sharpe Ratio: {sharpe_ratio:.2f}")
+    print(f"Sortino Ratio: {sortino_ratio:.2f}")
     print(f"Max Drawdown: {max_drawdown:.2%}")
 
     return {
@@ -648,8 +666,11 @@ def calculate_metrics(df):
         "win_rate": win_rate,
         "avg_win": avg_win,
         "avg_loss": avg_loss,
-        "final_return": final_return - 1,
+        "profit_factor": profit_factor,
+        "sharpe_ratio": sharpe_ratio,
+        "sortino_ratio": sortino_ratio,
         "max_drawdown": max_drawdown,
+        "cumulative_returns": df["cumulative_returns"].iloc[-1] - 1,
     }
 
 

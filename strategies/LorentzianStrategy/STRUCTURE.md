@@ -1,27 +1,27 @@
-# 📁 Project Structure: Lorentzian Trading System
+# �� Project Structure: GPU-Accelerated Trading System
 
 This document provides a comprehensive guide to the project structure and explains how all components work together.
 
 ## 🎯 System Overview
 
-The trading system combines three core components with supporting infrastructure:
+The trading system is built around three core principles:
 
-### Core Components
+1. **🚀 GPU Acceleration**
+   - All components optimized for GPU processing
+   - Efficient batch operations
+   - Real-time performance
 
-1. **🔍 Primary Signal Generator: Lorentzian ANN**
-   - Uses K-Nearest Neighbors with Lorentzian distance
-   - Identifies potential trading opportunities
-   - Generates initial buy/sell signals
+2. **📊 Multi-timeframe Analysis**
+   - Short-term (5-period window)
+   - Medium-term (10-period window)
+   - Long-term (20-period window)
+   - Dynamic weight adjustment
 
-2. **✅ Signal Confirmation: Logistic Regression**
-   - Validates signals from the Lorentzian ANN
-   - Reduces false positives
-   - Provides probability scores for trades
-
-3. **🛡️ Risk Management: Chandelier Exit**
-   - Manages position exits
-   - Calculates dynamic stop-loss levels
-   - Uses ATR for volatility-based adjustments
+3. **⚖️ Adaptive Risk Management**
+   - Volatility-based position sizing
+   - Dynamic stop-loss calculation
+   - Market regime detection
+   - Performance monitoring
 
 ## 📂 Directory Structure & Component Guide
 
@@ -29,163 +29,166 @@ The trading system combines three core components with supporting infrastructure
 strategies/LorentzianStrategy/
 │
 ├── 📊 Core Strategy Files
-│   ├── lorentzian_strategy.py     # Main Freqtrade strategy implementation
-│   ├── integrated_ml_trader.py    # Combines all ML components
-│   ├── generate_signals.py        # Signal generation utilities
-│   └── config.py                  # Central configuration
+│   ├── lorentzian_strategy.py      # Main strategy implementation
+│   └── config.py                   # Central configuration
 │
 ├── 📈 Models
-│   ├── primary/
-│   │   └── lorentzian_classifier.py    # Primary signal generation
-│   ├── confirmation/
-│   │   └── logistic_regression_torch.py # Signal validation
-│   ├── risk_management/
-│   │   └── chandelier_exit.py          # Exit management
-│   └── torch_model.py                   # Base PyTorch model utilities
+│   └── primary/
+│       └── lorentzian_classifier.py  # Signal generation model
 │
-├── 📉 Indicators
-│   ├── base_torch_indicator.py    # Base class for all indicators
-│   ├── technical_indicators.py    # Collection of basic indicators
-│   ├── trend_levels.py           # Support/Resistance detection
-│   ├── rsi.py                    # Relative Strength Index
-│   ├── cci.py                    # Commodity Channel Index
-│   ├── adx.py                    # Average Directional Index
-│   ├── wave_trend.py             # WaveTrend oscillator
-│   └── chandelier_exit.py        # Chandelier Exit indicator
+├── 📉 Features
+│   ├── base.py                     # Base feature class
+│   ├── rsi.py                      # RSI implementation
+│   ├── wave_trend.py              # WaveTrend oscillator
+│   ├── cci.py                     # Commodity Channel Index
+│   └── adx.py                     # Average Directional Index
 │
-├── 🧪 Testing & Examples
-│   ├── run_backtest.py          # Standalone backtesting script
-│   ├── test_lorentzian_save.py  # Model saving/loading tests
-│   └── examples/                 # Usage examples and notebooks
+├── 🧪 Testing
+│   ├── test_model_comparison.py   # Implementation comparison
+│   └── test_features/            # Feature unit tests
 │
 └── 📚 Documentation
-    ├── README.md                # Quick start guide
-    ├── DOCUMENTATION.md         # Detailed component documentation
-    ├── INTEGRATION.md          # Integration guidelines
-    ├── STRUCTURE.md            # This file
-    └── requirements.txt        # Project dependencies
+    ├── README.md                 # Quick start guide
+    ├── DOCUMENTATION.md          # Component documentation
+    ├── INTEGRATION.md           # Integration guidelines
+    └── STRUCTURE.md             # This file
 ```
 
 ## 🔄 Data Flow & Integration
 
-### Signal Generation Pipeline
-1. Raw price data → Technical Indicators
-2. Indicators → Lorentzian ANN
-3. ANN Signals → Logistic Regression
-4. Confirmed Signals → Risk Management
-5. Final Decisions → Trade Execution
+### Feature Processing Pipeline
+1. Raw price data → GPU tensors
+2. Tensor data → Feature calculations
+3. Features → Multi-timeframe analysis
+4. Analysis → Signal generation
+5. Signals → Position management
 
 ### Key Integration Points
 
-1. **Data Preparation**
+1. **Feature Calculation**
    ```python
-   from strategies.LorentzianStrategy.indicators.technical_indicators import calculate_indicators
+   from strategies.LorentzianStrategy.features import RSIFeature, WaveTrendFeature
    
-   # Prepare data with all required indicators
-   data = calculate_indicators(price_data)
+   # Initialize on GPU
+   rsi = RSIFeature(period=14)
+   wave_trend = WaveTrendFeature(channel_length=10)
+   
+   # Calculate features
+   features = {
+       'rsi': rsi.forward(close_prices),
+       'wave_trend': wave_trend.forward(high, low, close)
+   }
    ```
 
 2. **Signal Generation**
    ```python
-   from strategies.LorentzianStrategy.generate_signals import generate_trading_signals
+   from strategies.LorentzianStrategy.models.primary.lorentzian_classifier import LorentzianClassifier
    
-   # Generate signals using all models
-   signals = generate_trading_signals(data)
+   # Initialize classifier
+   classifier = LorentzianClassifier()
+   
+   # Generate signals with multi-timeframe analysis
+   signals = classifier.generate_signals(features)
    ```
 
-3. **Risk Management**
+3. **Position Management**
    ```python
-   from strategies.LorentzianStrategy.models.risk_management.chandelier_exit import ChandelierExit
+   # Calculate position size based on volatility
+   position_size = classifier.calculate_position_size(
+       signal=signals[-1],
+       volatility=current_volatility,
+       balance=account_balance
+   )
    
-   # Set up risk management
-   risk_manager = ChandelierExit()
-   exit_signals = risk_manager.calculate_exits(data, signals)
+   # Get adaptive stop levels
+   stop_loss, take_profit = classifier.manage_risk(
+       position=position_size,
+       current_price=price,
+       volatility=current_volatility
+   )
    ```
 
 ## 🛠️ Common Usage Patterns
 
-### 1. Standalone Backtesting
+### 1. Feature Development
 ```python
-from strategies.LorentzianStrategy.integrated_ml_trader import IntegratedMLTrader
+from strategies.LorentzianStrategy.features.base import BaseFeature
+import torch
 
-# Initialize the integrated system
-trader = IntegratedMLTrader()
-
-# Load and prepare data
-data = trader.prepare_data(your_data)
-
-# Run backtest
-results = trader.run_backtest(data)
+class NewFeature(BaseFeature):
+    def forward(self, data: torch.Tensor) -> torch.Tensor:
+        # GPU-accelerated calculations
+        return processed_data
 ```
 
-### 2. Live Trading with Freqtrade
+### 2. Model Integration
 ```python
-# In your freqtrade config:
-"strategy": "LorentzianStrategy",
-"strategy_path": "/path/to/strategies/"
-```
-
-### 3. Model Training
-```python
-from strategies.LorentzianStrategy.models.primary.lorentzian_classifier import LorentzianClassifier
-from strategies.LorentzianStrategy.models.confirmation.logistic_regression_torch import LogisticRegressionModel
-
-# Train primary model
-lorentzian = LorentzianClassifier()
-lorentzian.train(training_data)
-
-# Train confirmation model
-confirmation = LogisticRegressionModel()
-confirmation.train(training_data)
+# In your strategy file
+def populate_indicators(self, dataframe: DataFrame) -> DataFrame:
+    # Convert to tensor
+    tensor_data = torch.tensor(dataframe['close'].values, device=self.device)
+    
+    # Calculate features
+    features = self.calculate_features(tensor_data)
+    
+    # Generate signals
+    signals = self.classifier.generate_signals(features)
+    
+    return self.prepare_dataframe(dataframe, signals)
 ```
 
 ## 🔧 Configuration
 
-Key configuration files and their purposes:
+Key configuration areas:
 
-1. `config.py`: Central configuration for all components
-   - Model parameters
-   - Indicator settings
-   - Trading thresholds
+1. **Feature Parameters**
+   - Lookback periods
+   - Smoothing factors
+   - Calculation methods
 
-2. `requirements.txt`: Project dependencies
-   - PyTorch
-   - Technical analysis libraries
-   - Data processing utilities
+2. **Signal Generation**
+   - Timeframe weights
+   - Threshold levels
+   - Regime detection
+
+3. **Risk Management**
+   - Position sizing
+   - Stop-loss calculation
+   - Take-profit levels
 
 ## 📈 Development Workflow
 
-1. **Setup**
-   ```bash
-   pip install -r requirements.txt
-   ```
+1. **Feature Development**
+   - Implement in `features/` directory
+   - Ensure GPU optimization
+   - Add unit tests
 
-2. **Testing Changes**
-   - Use `run_backtest.py` for quick validation
-   - Check signal generation with `generate_signals.py`
-   - Verify model saving/loading with `test_lorentzian_save.py`
+2. **Testing**
+   - Use `test_model_comparison.py`
+   - Verify GPU utilization
+   - Check performance metrics
 
 3. **Integration**
-   - Follow guidelines in `INTEGRATION.md`
-   - Test components individually
-   - Verify full system integration
+   - Update configuration
+   - Test with live data
+   - Monitor performance
 
-## 🔍 Troubleshooting Guide
+## 🔍 Performance Optimization
 
-Common issues and solutions:
+1. **GPU Utilization**
+   - Batch processing
+   - In-place operations
+   - Memory management
 
-1. **Model Loading Errors**
-   - Verify model file paths in `config.py`
-   - Check PyTorch version compatibility
+2. **Feature Optimization**
+   - Vectorized calculations
+   - Efficient algorithms
+   - Minimal CPU-GPU transfers
 
-2. **Signal Generation Issues**
-   - Confirm all required indicators are calculated
-   - Verify data preprocessing steps
-
-3. **Performance Problems**
-   - Check indicator calculation efficiency
-   - Verify GPU utilization if available
-   - Monitor memory usage with large datasets
+3. **Memory Management**
+   - Tensor cleanup
+   - Cache optimization
+   - Resource monitoring
 
 ---
 

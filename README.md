@@ -2,6 +2,14 @@
 
 This repository contains a machine learning-based trading system that uses a Lorentzian Approximate Nearest Neighbors classifier to generate trading signals for cryptocurrency markets.
 
+## Key Features
+
+- GPU-accelerated technical indicators
+- Multi-timeframe analysis
+- Dynamic feature weighting
+- Regime-aware position sizing
+- Modular architecture for easy extension
+
 ## Setup
 
 1. Ensure you have Freqtrade installed. If not, follow the [Freqtrade installation guide](https://www.freqtrade.io/en/stable/installation/).
@@ -13,29 +21,37 @@ This repository contains a machine learning-based trading system that uses a Lor
    pip install torch pandas numpy matplotlib scikit-learn
    ```
 
-## Files
+## Project Structure
 
-- `analyze_lorentzian_ann.py`: The core implementation of the Lorentzian ANN model
-- `test_lorentzian_save.py`: Script to test the model's save/load functionality
-- `test_freqtrade_lorentzian.py`: Script to test the model with Freqtrade's backtesting data
-- `run_live_trading.py`: Script to start Freqtrade with live trading
-- `monitor_trades.py`: Script to monitor trading performance
-- `config_live.json`: Configuration file for live trading
+```
+.
+├── strategies/              # Trading strategies
+│   └── LorentzianStrategy/ # Main strategy implementation
+│       ├── features/       # Technical indicators
+│       └── models/        # ML models
+├── tests/                 # Test suite
+├── docs/                 # Documentation
+└── example_data/        # Sample data
+```
 
-## Running Backtests
+For detailed documentation, see:
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Feature Engineering System](docs/FEATURES.md)
+- [Technical Strategy Details](docs/TECHNICAL_STRATEGY.md)
 
-To run a backtest:
+## Running Tests
+
+To compare different implementations:
 
 ```bash
-python test_freqtrade_lorentzian.py --pair SOL/USDT --timeframe 5m
+python test_model_comparison.py
 ```
 
 This will:
 1. Load historical data
-2. Either load a pre-trained model or train a new one
-3. Generate predictions
-4. Calculate performance metrics
-5. Plot results
+2. Test Modern, Standalone, and Analysis implementations
+3. Generate performance metrics
+4. Plot comparison results
 
 ## Live Trading
 
@@ -70,21 +86,18 @@ When ready to trade with real money:
 
 ## Strategy Settings
 
-The Lorentzian ANN strategy has these key parameters:
+The Lorentzian Strategy has these key parameters:
 
-- `lookback_bars`: Number of bars to look back for training (default: 50)
-- `prediction_bars`: Number of bars to look ahead for prediction (default: 4)
-- `k_neighbors`: Number of neighbors to consider (default: 20)
+- **Timeframe Weights**:
+  - Short-term: 0.4
+  - Medium-term: 0.35
+  - Long-term: 0.25
 
-You can adjust these in the strategy file or through Freqtrade's hyperopt.
+- **Signal Thresholds**:
+  - Buy: > 0.10
+  - Sell: < -0.10
 
-## Model Training
-
-The model is trained on historical data and automatically updates during live trading. It uses:
-
-1. Feature extraction: RSI, WaveTrend, CCI, and ADX indicators
-2. Lorentzian distance metric for better pattern recognition
-3. Continuous learning to adapt to market changes
+You can adjust these in `strategies/LorentzianStrategy/models/primary/lorentzian_classifier.py`.
 
 ## Performance Monitoring
 
@@ -96,17 +109,17 @@ The monitoring script provides:
 
 ## Advanced Usage
 
-### Incremental Training
+### Model Updates
 
-The model supports incremental training to continuously adapt to market conditions:
+The model supports continuous learning:
 
 ```python
 # Load existing model
-model = LorentzianANN()
+model = LorentzianClassifier()
 model.load_model("models/lorentzian_model.pt")
 
 # Update with new data
-model.update_model(new_features, new_prices, max_samples=500)
+model.update(new_features, new_prices)
 ```
 
 ### Parameter Optimization
@@ -116,6 +129,40 @@ To optimize strategy parameters:
 ```bash
 freqtrade hyperopt --hyperopt-loss SharpeHyperOptLoss --strategy LorentzianStrategy
 ```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Files
+
+- `analyze_lorentzian_ann.py`: The core implementation of the Lorentzian ANN model
+- `test_lorentzian_save.py`: Script to test the model's save/load functionality
+- `test_freqtrade_lorentzian.py`: Script to test the model with Freqtrade's backtesting data
+- `run_live_trading.py`: Script to start Freqtrade with live trading
+- `monitor_trades.py`: Script to monitor trading performance
+- `config_live.json`: Configuration file for live trading
+
+## Running Backtests
+
+To run a backtest:
+
+```bash
+python test_freqtrade_lorentzian.py --pair SOL/USDT --timeframe 5m
+```
+
+This will:
+1. Load historical data
+2. Either load a pre-trained model or train a new one
+3. Generate predictions
+4. Calculate performance metrics
+5. Plot results
 
 ## Archived Files
 

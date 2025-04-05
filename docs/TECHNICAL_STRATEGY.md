@@ -12,287 +12,239 @@
 
 This strategy combines machine learning with traditional technical analysis to create a robust trading system. The core components work in harmony to identify, validate, and execute trades.
 
-### Signal Hierarchy
+### Signal Generation Flow
 ```mermaid
 graph TD
-    A[Lorentzian Classifier] -->|Primary Signal| D[Trade Decision]
-    B[Logistic Regression] -->|Confirmation| D
-    C[Chandelier Exit] -->|Risk Management| D
+    A[Feature Calculation] -->|GPU Accelerated| B[Multi-timeframe Analysis]
+    B -->|Weighted Signals| C[Signal Generation]
+    D[Market Regime] -->|Adaptive Weights| C
+    C -->|Final Signal| E[Position Management]
+    F[Volatility Filter] -->|Risk Adjustment| E
 ```
 
 ## Core Components
 
-### 1. Lorentzian Classification
-Primary signal generator using K-Nearest Neighbors with Lorentzian distance metric.
+### 1. Feature Engineering
+GPU-accelerated technical indicators in the `features/` directory:
 
 ```python
-def lorentzian_distance(x1, x2):
-    return np.log(1 + np.abs(x1 - x2))
-
-def calculate_lorentzian_score(data_window, neighbors=8):
-    distances = np.array([
-        lorentzian_distance(data_window[-1], x) 
-        for x in data_window[:-1]
-    ])
-    return np.mean(np.sort(distances)[:neighbors])
+class FeatureIndicator:
+    def __init__(self, **params):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+    def forward(self, *inputs):
+        # GPU-accelerated calculations
+        pass
 ```
 
-#### Feature Set
+#### Indicator Suite
+- RSI with customizable smoothing
+- WaveTrend with adaptive channel length
+- CCI with volatility scaling
+- ADX for trend strength measurement
+
+### 2. Multi-timeframe Analysis
 ```python
-features = {
-    'rsi_14_1': {'length': 14, 'smooth': 1},
-    'wavetrend': {'channel_length': 10, 'avg_length': 11},
-    'cci_20_1': {'length': 20, 'smooth': 1},
-    'adx_20_2': {'length': 20, 'smooth': 2},
-    'rsi_9_1': {'length': 9, 'smooth': 1}
-}
+def generate_signals(self, x: torch.Tensor) -> torch.Tensor:
+    # Get predictions from forward pass
+    scores = self.forward(x)
+    
+    # Initialize timeframe weights
+    weights = {
+        "short": 0.4,    # 5-period window
+        "medium": 0.35,  # 10-period window
+        "long": 0.25     # 20-period window
+    }
+    
+    # Calculate weighted signals
+    final_votes = (
+        weights["short"] * short_votes +
+        weights["medium"] * medium_votes +
+        weights["long"] * long_votes
+    )
+    
+    return signals
 ```
 
-### 2. Logistic Regression
-Probability-based signal confirmation using enhanced feature set.
+### 3. Adaptive Signal Generation
+Signal thresholds that adapt to market conditions:
 
 ```python
-class LogisticConfirmation:
-    def __init__(self, threshold=0.7):
-        self.threshold = threshold
-        self.model = LogisticRegression(
-            C=1.0,
-            class_weight='balanced',
-            max_iter=1000
-        )
-    
-    def confirm_signal(self, features, signal):
-        prob = self.model.predict_proba(features)[0]
-        return (prob > self.threshold and signal > 0) or \
-               (prob < (1-self.threshold) and signal < 0)
-```
-
-### 3. Chandelier Exit
-ATR-based trailing stop system for position management.
-
-```python
-def calculate_chandelier_exit(high, low, close, atr_period=22, multiplier=3.0):
-    atr = calculate_atr(high, low, close, atr_period)
-    
-    long_stop = high - (multiplier * atr)
-    short_stop = low + (multiplier * atr)
-    
-    return long_stop, short_stop
+def calculate_adaptive_threshold(volatility: torch.Tensor) -> torch.Tensor:
+    base_threshold = 0.10
+    volatility_scale = torch.clamp(volatility / volatility.mean(), 0.5, 2.0)
+    return base_threshold * volatility_scale
 ```
 
 ## Technical Indicators
 
-### 1. Wave Trend
+### 1. Enhanced RSI
 ```python
-def calculate_wave_trend(close, channel_length=10, avg_length=11):
-    esa = ema(close, channel_length)
-    d = ema(abs(close - esa), channel_length)
-    ci = (close - esa) / (0.015 * d)
-    wt1 = ema(ci, avg_length)
-    wt2 = sma(wt1, 4)
-    
-    return wt1, wt2
+class RSIFeature:
+    def forward(self, close: torch.Tensor) -> torch.Tensor:
+        # Calculate price changes
+        delta = close[1:] - close[:-1]
+        
+        # Separate gains and losses
+        gains = torch.where(delta > 0, delta, torch.zeros_like(delta))
+        losses = torch.where(delta < 0, -delta, torch.zeros_like(delta))
+        
+        # Calculate smoothed averages
+        avg_gain = self.smooth(gains)
+        avg_loss = self.smooth(losses)
+        
+        # Calculate RSI
+        rs = avg_gain / (avg_loss + 1e-6)
+        rsi = 100 - (100 / (1 + rs))
+        
+        return rsi
 ```
 
-### 2. Enhanced RSI
+### 2. WaveTrend with Volatility
 ```python
-def calculate_enhanced_rsi(close, length=14, smooth=1):
-    rsi = talib.RSI(close, timeperiod=length)
-    if smooth > 1:
-        rsi = talib.EMA(rsi, timeperiod=smooth)
-    return rsi
-```
-
-### 3. Custom CCI
-```python
-def calculate_custom_cci(high, low, close, length=20, smooth=1):
-    typical_price = (high + low + close) / 3
-    sma_tp = talib.SMA(typical_price, timeperiod=length)
-    mean_deviation = mean_dev(typical_price, length)
-    cci = (typical_price - sma_tp) / (0.015 * mean_deviation)
-    
-    if smooth > 1:
-        cci = talib.EMA(cci, timeperiod=smooth)
-    return cci
+class WaveTrendFeature:
+    def forward(
+        self, 
+        high: torch.Tensor, 
+        low: torch.Tensor, 
+        close: torch.Tensor
+    ) -> torch.Tensor:
+        # Calculate typical price
+        tp = (high + low + close) / 3
+        
+        # Estimate volatility
+        volatility = self.calculate_volatility(high, low)
+        
+        # Adjust channel length based on volatility
+        ap = self.ema(tp, self.channel_length * volatility)
+        
+        # Calculate oscillator
+        ci = (tp - ap) / (0.015 * self.calculate_meandev(tp, ap))
+        
+        return self.ema(ci, self.avg_length)
 ```
 
 ## Signal Generation
 
-### Feature Calculation
+### Feature Combination
 ```python
-def calculate_features(ohlcv_data):
-    features = {}
+def combine_features(self, features: Dict[str, torch.Tensor]) -> torch.Tensor:
+    # Normalize features
+    normalized = {
+        name: (f - f.mean()) / (f.std() + 1e-6)
+        for name, f in features.items()
+    }
     
-    # Price action features
-    features['close_change'] = np.diff(ohlcv_data['close'])
-    features['volume_change'] = np.diff(ohlcv_data['volume'])
-    
-    # Technical indicators
-    features['wt1'], features['wt2'] = calculate_wave_trend(
-        ohlcv_data['close']
-    )
-    features['rsi'] = calculate_enhanced_rsi(
-        ohlcv_data['close']
-    )
-    features['cci'] = calculate_custom_cci(
-        ohlcv_data['high'],
-        ohlcv_data['low'],
-        ohlcv_data['close']
+    # Combine with learned weights
+    combined = sum(
+        self.feature_weights[name] * feat 
+        for name, feat in normalized.items()
     )
     
-    return features
+    return combined
 ```
 
-### Signal Combination
+### Regime Detection
 ```python
-def generate_signal(features, lorentzian_signal, logistic_prob):
-    """
-    Combine signals from different components
+def detect_market_regime(
+    self, 
+    volatility: torch.Tensor,
+    trend: torch.Tensor
+) -> torch.Tensor:
+    # Classify market regime
+    is_trending = torch.abs(trend) > self.trend_threshold
+    is_volatile = volatility > self.volatility_threshold
     
-    Returns:
-        1: Long signal
-        -1: Short signal
-        0: No trade
-    """
-    if lorentzian_signal > 0 and logistic_prob > 0.7:
-        return 1
-    elif lorentzian_signal < 0 and logistic_prob < 0.3:
-        return -1
-    return 0
+    # Adjust weights based on regime
+    if is_trending and not is_volatile:
+        return "trend"
+    elif is_volatile:
+        return "volatile"
+    else:
+        return "range"
 ```
 
 ## Position Management
 
-### Entry Rules
-```python
-def validate_entry(signal, current_price, volatility):
-    min_volatility = calculate_min_volatility()
-    max_volatility = calculate_max_volatility()
-    
-    volatility_valid = min_volatility <= volatility <= max_volatility
-    
-    return signal != 0 and volatility_valid
-```
-
-### Position Sizing
+### Dynamic Position Sizing
 ```python
 def calculate_position_size(
-    account_balance,
-    risk_per_trade=0.02,  # 2% risk per trade
-    stop_distance=None
-):
-    if stop_distance is None:
-        stop_distance = calculate_atr(20) * 3
+    self,
+    signal: float,
+    volatility: float,
+    balance: float
+) -> float:
+    # Base risk percentage
+    risk_pct = 0.02  # 2% base risk
     
-    max_loss = account_balance * risk_per_trade
-    position_size = max_loss / stop_distance
+    # Adjust for volatility
+    vol_scale = min(max(1.0, volatility / self.avg_volatility), 2.0)
+    adjusted_risk = risk_pct / vol_scale
     
-    return position_size
+    # Calculate position size
+    price = self.get_current_price()
+    stop_distance = self.calculate_stop_distance(volatility)
+    
+    return (balance * adjusted_risk) / stop_distance
 ```
 
-### Stop Loss Management
+### Risk Management
 ```python
-def update_stops(
-    position,
-    current_price,
-    long_stop,
-    short_stop
-):
+def manage_risk(
+    self,
+    position: float,
+    current_price: float,
+    volatility: float
+) -> Tuple[float, float]:
+    # Calculate adaptive stops
+    atr = volatility * self.stop_multiplier
+    
     if position > 0:  # Long position
-        return long_stop
-    elif position < 0:  # Short position
-        return short_stop
-    return None
+        stop_loss = current_price - atr
+        take_profit = current_price + (atr * self.reward_ratio)
+    else:  # Short position
+        stop_loss = current_price + atr
+        take_profit = current_price - (atr * self.reward_ratio)
+    
+    return stop_loss, take_profit
 ```
 
 ## Implementation Details
 
-### Data Pipeline
+### GPU Optimization
 ```python
-class TradingPipeline:
-    def __init__(self, config):
-        self.features = FeatureCalculator(config)
-        self.signals = SignalGenerator(config)
-        self.risk = RiskManager(config)
-        
-    def process_data(self, ohlcv):
-        # Calculate features
-        features = self.features.calculate(ohlcv)
-        
-        # Generate signals
-        signals = self.signals.generate(features)
-        
-        # Manage risk
-        position = self.risk.manage_position(
-            signals,
-            features
-        )
-        
-        return position
-```
-
-### Model Training
-```python
-def train_models(X_train, y_train, config):
-    # Train Lorentzian Classifier
-    lorentzian = LorentzianClassifier(
-        n_neighbors=config.n_neighbors,
-        chronological_split=True
-    )
-    lorentzian.fit(X_train, y_train)
+def optimize_calculations(self):
+    # Move data to GPU
+    self.data = {
+        k: torch.tensor(v, device=self.device)
+        for k, v in self.data.items()
+    }
     
-    # Train Logistic Confirmation
-    logistic = LogisticConfirmation(
-        threshold=config.threshold
-    )
-    logistic.fit(X_train, y_train)
+    # Batch process features
+    with torch.cuda.amp.autocast():
+        features = self.calculate_features(self.data)
+        signals = self.generate_signals(features)
     
-    return lorentzian, logistic
+    return signals.cpu().numpy()
 ```
 
 ### Performance Monitoring
 ```python
-class PerformanceMonitor:
-    def __init__(self):
-        self.trades = []
-        self.metrics = {}
+def monitor_performance(self):
+    metrics = {
+        'win_rate': self.calculate_win_rate(),
+        'profit_factor': self.calculate_profit_factor(),
+        'sharpe_ratio': self.calculate_sharpe_ratio(),
+        'max_drawdown': self.calculate_max_drawdown()
+    }
     
-    def log_trade(self, trade):
-        self.trades.append(trade)
-        self.update_metrics()
+    # Log metrics
+    self.logger.info(f"Performance Metrics: {metrics}")
     
-    def update_metrics(self):
-        self.metrics['win_rate'] = self.calculate_win_rate()
-        self.metrics['profit_factor'] = self.calculate_profit_factor()
-        self.metrics['sharpe_ratio'] = self.calculate_sharpe_ratio()
+    return metrics
 ```
 
 ## Configuration
 
 ### Example config.yaml
-```yaml
-model:
-  lorentzian:
-    n_neighbors: 8
-    chronological_split: true
-    feature_set:
-      - rsi_14_1
-      - wavetrend
-      - cci_20_1
-      - adx_20_2
-      - rsi_9_1
-
-  logistic:
-    threshold: 0.7
-    class_weight: balanced
-    max_iter: 1000
-
-risk:
-  max_position_size: 0.1  # 10% of account
-  risk_per_trade: 0.02   # 2% risk per trade
-  max_leverage: 20
 ```
-
----
-
-*This document provides the technical implementation details of our trading strategy. It serves as a reference for development and maintenance of the trading system.* 
