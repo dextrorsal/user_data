@@ -20,10 +20,10 @@ class TorchIndicatorConfig:
 class BaseTorchIndicator(nn.Module):
     """Base class for all PyTorch-based indicators"""
     
-    def __init__(self, config: TorchIndicatorConfig):
+    def __init__(self, config: Optional[TorchIndicatorConfig] = None):
         """Initialize base indicator"""
         super().__init__()
-        self.config = config
+        self.config = config or TorchIndicatorConfig()
         
         # Setup device and data type
         self.device = (
@@ -32,9 +32,6 @@ class BaseTorchIndicator(nn.Module):
         )
         self.dtype = config.dtype or torch.float32
         self.use_amp = config.use_amp
-        self.scaler = (
-            torch.amp.GradScaler('cuda') if self.use_amp else None
-        )
         
     def to_tensor(
         self, 
@@ -56,43 +53,18 @@ class BaseTorchIndicator(nn.Module):
                 dtype=self.dtype
             )
             
-    def ema(self, data: torch.Tensor, length: int) -> torch.Tensor:
+    def torch_ema(self, data: torch.Tensor, alpha: float = 0.2) -> torch.Tensor:
         """Calculate EMA using PyTorch"""
-        alpha = 2.0 / (length + 1)
-        alpha_rev = 1 - alpha
+        # Initialize with the first value
+        ema = torch.zeros_like(data)
+        ema[0] = data[0]
         
-        scale = 1/alpha_rev
-        n = data.shape[0]
+        # Calculate EMA
+        for i in range(1, len(data)):
+            ema[i] = alpha * data[i] + (1 - alpha) * ema[i-1]
+            
+        return ema
         
-        r = torch.arange(n, device=self.device)
-        scale_arr = scale**r
-        offset = data[0]*alpha_rev**(r+1)
-        pw0 = alpha*alpha_rev**(n-1)
-        
-        mult = data*pw0*scale_arr
-        cumsums = mult.flip(0).cumsum(0).flip(0)
-        out = offset + cumsums*scale_arr
-        return out
-        
-    def sma(self, data: torch.Tensor, length: int) -> torch.Tensor:
-        """Calculate SMA using PyTorch"""
-        return nn.functional.avg_pool1d(
-            data.view(1, 1, -1), 
-            kernel_size=length, 
-            stride=1
-        ).view(-1)
-        
-    def rma(self, data: torch.Tensor, length: int) -> torch.Tensor:
-        """Calculate RMA (Modified Moving Average) using PyTorch"""
-        alpha = 1.0 / length
-        return self.ema(data, int(2/alpha - 1))
-        
-    def populate_indicators(self, dataframe: pd.DataFrame) -> pd.DataFrame:
-        """Populate indicator values in the dataframe"""
-        raise NotImplementedError(
-            "Subclasses must implement populate_indicators"
-        )
-
     def calculate_signals(
         self, 
         data: pd.DataFrame

@@ -30,8 +30,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
-from ....features.technical.indicators.base_torch_indicator import BaseTorchIndicator, TorchIndicatorConfig
-from models.configs import TradingConfig
+from strategies.LorentzianStrategy.indicators.base_torch_indicator import BaseTorchIndicator, TorchIndicatorConfig
 from contextlib import nullcontext
 
 @dataclass

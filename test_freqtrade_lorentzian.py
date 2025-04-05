@@ -23,14 +23,8 @@ except ImportError:
     print("FreqTrade modules not found. Make sure FreqTrade is installed.")
     sys.exit(1)
 
-# Load the Lorentzian ANN strategy
-strategy_path = Path(__file__).parent / "strategies" / "LorentzianStrategy" / "lorentzian_strategy.py"
-if not strategy_path.exists():
-    print(f"Strategy file not found at {strategy_path}")
-    sys.exit(1)
-    
-# Import the Lorentzian ANN model (for direct testing)
-from analyze_lorentzian_ann import LorentzianANN, prepare_indicators
+# Import the strategy directly
+from strategies.LorentzianStrategy.lorentzian_strategy import LorentzianStrategy, LorentzianANN, prepare_indicators, prepare_features
 
 def load_data(pair="BTC/USDT", timeframe="5m", data_dir="user_data/data/bitget/futures"):
     """Load historical data for testing"""
@@ -84,7 +78,6 @@ def test_strategy(pair="SOL/USDT", timeframe="5m"):
         print("Training new model...")
         
         # Prepare features
-        from analyze_lorentzian_ann import prepare_features
         features, scaler = prepare_features(df)
         
         # Train model
@@ -172,9 +165,24 @@ def test_strategy(pair="SOL/USDT", timeframe="5m"):
     
     plt.tight_layout()
     plt.savefig(f'lorentzian_freqtrade_{pair.replace("/", "_")}.png')
-    plt.show()
+    print(f"Saved chart to lorentzian_freqtrade_{pair.replace('/', '_')}.png")
     
     return df
+
+def test_freqtrade_strategy(config_file="config.json"):
+    """Test strategy using Freqtrade's backtesting engine"""
+    
+    # This would use Freqtrade's backtesting engine
+    # For now, we'll just initialize the strategy
+    
+    # Load strategy
+    strategy = LorentzianStrategy({})
+    print(f"Initialized Freqtrade strategy: {strategy.__class__.__name__}")
+    print(f"Timeframe: {strategy.timeframe}")
+    print(f"Stop loss: {strategy.stoploss:.2%}")
+    print(f"ROI: {strategy.minimal_roi}")
+    
+    return strategy
 
 if __name__ == "__main__":
     import argparse
@@ -182,8 +190,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Test Lorentzian ANN strategy with Freqtrade data')
     parser.add_argument('--pair', type=str, default='SOL/USDT', help='Trading pair to analyze')
     parser.add_argument('--timeframe', type=str, default='5m', help='Timeframe to use')
+    parser.add_argument('--freqtrade', action='store_true', help='Use Freqtrade backtesting engine')
     
     args = parser.parse_args()
     
-    # Run test
-    test_strategy(pair=args.pair, timeframe=args.timeframe) 
+    if args.freqtrade:
+        # Use Freqtrade backtesting engine
+        test_freqtrade_strategy()
+    else:
+        # Run our custom test
+        test_strategy(pair=args.pair, timeframe=args.timeframe) 

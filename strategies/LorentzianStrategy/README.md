@@ -1,104 +1,118 @@
-# 🧠 Lorentzian Strategy for Freqtrade
+# 🚀 Integrated ML Trading System
 
-## Overview
-This is a sophisticated trading strategy that combines deep learning with traditional technical analysis. It uses multiple layers of analysis to generate trading signals:
+This system combines multiple machine learning and technical analysis approaches into a cohesive trading strategy. The three core components work together to generate high-quality trading signals while managing risk effectively.
 
-### 1. Primary Signal Generation
-- **Deep Learning Model**: LSTM with Attention mechanism
-  - Processes multiple timeframes
-  - Generates directional signals with confidence scores
-- **Lorentzian Classifier**: KNN-based classification using custom distance metric
-  - Provides market regime identification
-  - Helps filter out poor trading conditions
+## 🧩 Core Components
 
-### 2. Signal Confirmation
-- **Custom Technical Indicators**:
-  - Wave Trend (Enhanced)
-  - Custom CCI with smoothing
-  - Enhanced RSI with multiple timeframes
-  - ADX for trend strength
+### 1. Lorentzian ANN (Primary Signal Generator)
+Uses K-Nearest Neighbors with Lorentzian distance metrics to identify trading opportunities based on historical patterns. This approach is similar to TradingView's Lorentzian classification system and serves as our primary signal generator.
 
-### 3. Risk Management
-- **Chandelier Exit**: Dynamic trailing stop system
-- **Position Sizing**: Based on account risk and volatility
-- **Multi-timeframe Confirmation**: Reduces false signals
+### 2. Logistic Regression (Signal Confirmation)
+Acts as a confirmation mechanism, using probability-based signal validation to reduce false positives. The deep learning mode provides more sophisticated pattern recognition capabilities.
 
-## Requirements
-```bash
-# Core Dependencies
-pytorch>=2.0.0
-pandas>=1.5.0
-numpy>=1.20.0
-ta-lib>=0.4.0
-scikit-learn>=1.0.0
+### 3. Chandelier Exit (Risk Management)
+Implements ATR-based trailing stops to manage positions and protect profits. This technique dynamically adjusts stop loss levels based on market volatility.
 
-# Freqtrade Requirements
-freqtrade>=2023.12
+## 📊 Signal Flow
+
+The system follows this signal generation hierarchy:
+
+```
+Lorentzian ANN (Primary Signal) → Logistic Regression (Confirmation) → Chandelier Exit (Risk Management)
 ```
 
-## Installation
-1. Copy this strategy folder to your Freqtrade `user_data/strategies` directory
-2. Install required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+A trade is only executed when:
+1. The Lorentzian ANN generates a signal
+2. The Logistic Regression model confirms the signal
+3. The Chandelier Exit provides appropriate stop levels
 
-## Configuration
-Key parameters in your config.json:
-```json
-{
-    "strategy": "LorentzianStrategy",
-    "max_open_trades": 3,
-    "stake_currency": "USDT",
-    "stake_amount": "unlimited",
-    "timeframe": "5m",
-    "dry_run": true
-}
+## 🛠️ Technical Features
+
+- **GPU Acceleration**: All components support GPU acceleration for faster training and inference
+- **Persistence**: Models can be saved and loaded for later use
+- **Configurable Parameters**: Extensive configuration options for all components
+- **Adaptive Learning**: Models can be updated with new data without full retraining
+- **Risk Management**: Advanced position sizing and stop loss management
+
+## 📈 Trading Strategy
+
+### Entry Criteria
+- Long: Lorentzian signal = 1, Logistic probability > threshold
+- Short: Lorentzian signal = -1, Logistic probability < (1-threshold)
+
+### Exit Criteria
+- Trailing stop hit (Chandelier Exit)
+- Opposing signal generated
+- Take profit target reached
+
+### Risk Management
+- Position sizing based on ATR and account risk parameters
+- Trailing stops adjusted as trade moves into profit
+- Optional scale-out at predefined profit targets
+
+## 🔧 Configuration
+
+Three primary configuration profiles are available:
+- `default_config`: Balanced risk-reward approach
+- `aggressive_config`: Higher returns with increased drawdowns
+- `conservative_config`: Lower returns with reduced drawdowns
+
+## 📊 Performance Metrics
+
+The system tracks:
+- Win rate
+- Profit factor
+- Average win/loss
+- Maximum drawdown
+- Sharpe ratio
+- Equity curve
+
+## 📖 Usage
+
+```python
+# Example usage
+from strategies.LorentzianStrategy.integrated_ml_trader import IntegratedMLTrader
+from strategies.LorentzianStrategy.config import default_config
+
+# Load data
+df = pd.read_feather("data/btc_usdt_5m.feather")
+
+# Add indicators
+# ... preprocessing code ...
+
+# Create trader
+trader = IntegratedMLTrader(config=default_config)
+
+# Train models
+trader.train_models(df)
+
+# Generate signals
+df = trader.generate_signals(df)
+
+# Backtest
+results = trader.backtest(df)
+
+# Plot results
+trader.plot_results(results)
 ```
 
-## Model Architecture
-```mermaid
-graph TD
-    A[OHLCV Data] --> B[Feature Extraction]
-    B --> C[LSTM Layer]
-    C --> D[Attention Layer]
-    D --> E[Direction Head]
-    D --> F[Confidence Head]
-    E --> G[Signal Generation]
-    F --> G
-    G --> H[Position Management]
-```
+## 📦 Files
 
-## Usage
-1. Train the model:
-   ```bash
-   freqtrade trade --strategy LorentzianStrategy --config config.json
-   ```
-2. Backtest:
-   ```bash
-   freqtrade backtesting --strategy LorentzianStrategy --config config.json
-   ```
+- `integrated_ml_trader.py`: Main integration class
+- `lorentzian_classifier.py`: Lorentzian ANN implementation
+- `models/confirmation/logistic_regression_torch.py`: Logistic Regression model
+- `models/risk_management/chandelier_exit.py`: Chandelier Exit implementation
+- `config.py`: Configuration classes and presets
 
-## Strategy Parameters
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `lookback_period` | 30 | Candles for feature calculation |
-| `confidence_threshold` | 0.7 | Min confidence for trade entry |
-| `min_rsi` | 20 | Minimum RSI for longs |
-| `max_rsi` | 80 | Maximum RSI for shorts |
-| `atr_period` | 14 | ATR calculation period |
+## 🔍 Future Enhancements
 
-## Performance Metrics
-- Win Rate: TBD
-- Profit Factor: TBD
-- Sharpe Ratio: TBD
-- Max Drawdown: TBD
+- [ ] Market regime detection
+- [ ] Real-time signal generation
+- [ ] Multi-timeframe analysis
+- [ ] Portfolio optimization
+- [ ] Event-based backtesting
+- [ ] Web dashboard
 
-## Warning
-This is a sophisticated strategy that requires proper understanding of:
-- Deep Learning concepts
-- Risk management
-- Market regimes
-- Position sizing
+---
 
-Always test thoroughly in dry-run mode first! 
+*This trading system is for educational purposes only. Always conduct your own research and risk assessment before trading.* 
