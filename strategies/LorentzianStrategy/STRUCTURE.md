@@ -1,129 +1,192 @@
 # 📁 Project Structure: Lorentzian Trading System
 
-This document provides a clear overview of the project structure and explains how all components fit together.
+This document provides a comprehensive guide to the project structure and explains how all components work together.
 
-## 📋 Component Overview
+## 🎯 System Overview
 
-The trading system is composed of three main components:
+The trading system combines three core components with supporting infrastructure:
+
+### Core Components
 
 1. **🔍 Primary Signal Generator: Lorentzian ANN**
-   - Located in `models/primary/lorentzian_classifier.py`
-   - Generates initial trading signals using K-Nearest Neighbors with Lorentzian distance
+   - Uses K-Nearest Neighbors with Lorentzian distance
+   - Identifies potential trading opportunities
+   - Generates initial buy/sell signals
 
 2. **✅ Signal Confirmation: Logistic Regression**
-   - Located in `models/confirmation/logistic_regression_torch.py`
-   - Validates signals from the primary generator to reduce false positives
+   - Validates signals from the Lorentzian ANN
+   - Reduces false positives
+   - Provides probability scores for trades
 
 3. **🛡️ Risk Management: Chandelier Exit**
-   - Located in `models/risk_management/chandelier_exit.py` 
-   - Manages position exits and stop loss levels based on ATR
+   - Manages position exits
+   - Calculates dynamic stop-loss levels
+   - Uses ATR for volatility-based adjustments
 
-## 🔄 Flow of Execution
-
-The typical flow through the system is:
-
-1. Price data is received and indicators are calculated
-2. Lorentzian ANN generates potential trading signals
-3. Logistic Regression confirms or rejects these signals
-4. Chandelier Exit provides stop loss levels and exit signals
-5. If all conditions align, a trade is executed
-
-## 📂 Directory Structure
+## 📂 Directory Structure & Component Guide
 
 ```
 strategies/LorentzianStrategy/
 │
-├── indicators/                  # Technical indicators with PyTorch acceleration
-│   ├── base_torch_indicator.py  # Base class for all indicators
-│   ├── rsi.py                   # RSI implementation
-│   ├── cci.py                   # CCI implementation
-│   ├── adx.py                   # ADX implementation
-│   ├── wave_trend.py            # WaveTrend indicator
-│   └── chandelier_exit.py       # Chandelier Exit (redundant with risk_management version)
+├── 📊 Core Strategy Files
+│   ├── lorentzian_strategy.py     # Main Freqtrade strategy implementation
+│   ├── integrated_ml_trader.py    # Combines all ML components
+│   ├── generate_signals.py        # Signal generation utilities
+│   └── config.py                  # Central configuration
 │
-├── models/                      # ML model implementations
-│   ├── primary/                 # Primary signal generation
-│   │   └── lorentzian_classifier.py  # Lorentzian ANN implementation
-│   ├── confirmation/            # Signal confirmation
-│   │   └── logistic_regression_torch.py  # Logistic Regression model
-│   └── risk_management/         # Risk management
-│       └── chandelier_exit.py   # Chandelier Exit implementation
+├── 📈 Models
+│   ├── primary/
+│   │   └── lorentzian_classifier.py    # Primary signal generation
+│   ├── confirmation/
+│   │   └── logistic_regression_torch.py # Signal validation
+│   ├── risk_management/
+│   │   └── chandelier_exit.py          # Exit management
+│   └── torch_model.py                   # Base PyTorch model utilities
 │
-├── lorentzian_strategy.py       # Main strategy implementation for Freqtrade
-├── lorentzian_classifier.py     # Standalone Lorentzian classifier (redundant)
-├── integrated_ml_trader.py      # Main integration class combining all components
-├── config.py                    # Configuration settings for all components
-└── README.md                    # Project documentation
+├── 📉 Indicators
+│   ├── base_torch_indicator.py    # Base class for all indicators
+│   ├── technical_indicators.py    # Collection of basic indicators
+│   ├── trend_levels.py           # Support/Resistance detection
+│   ├── rsi.py                    # Relative Strength Index
+│   ├── cci.py                    # Commodity Channel Index
+│   ├── adx.py                    # Average Directional Index
+│   ├── wave_trend.py             # WaveTrend oscillator
+│   └── chandelier_exit.py        # Chandelier Exit indicator
+│
+├── 🧪 Testing & Examples
+│   ├── run_backtest.py          # Standalone backtesting script
+│   ├── test_lorentzian_save.py  # Model saving/loading tests
+│   └── examples/                 # Usage examples and notebooks
+│
+└── 📚 Documentation
+    ├── README.md                # Quick start guide
+    ├── DOCUMENTATION.md         # Detailed component documentation
+    ├── INTEGRATION.md          # Integration guidelines
+    ├── STRUCTURE.md            # This file
+    └── requirements.txt        # Project dependencies
 ```
 
-## 🔌 Integration Points
+## 🔄 Data Flow & Integration
 
-- **integrated_ml_trader.py** - Main class that integrates all three components
-- **lorentzian_strategy.py** - Freqtrade strategy implementation
-- **config.py** - Central configuration for all components
+### Signal Generation Pipeline
+1. Raw price data → Technical Indicators
+2. Indicators → Lorentzian ANN
+3. ANN Signals → Logistic Regression
+4. Confirmed Signals → Risk Management
+5. Final Decisions → Trade Execution
 
-## 🔄 Redundant Files
+### Key Integration Points
 
-Some files are redundant and serve similar purposes:
+1. **Data Preparation**
+   ```python
+   from strategies.LorentzianStrategy.indicators.technical_indicators import calculate_indicators
+   
+   # Prepare data with all required indicators
+   data = calculate_indicators(price_data)
+   ```
 
-1. **Lorentzian Classifier implementations**:
-   - `lorentzian_classifier.py` (standalone)
-   - `models/primary/lorentzian_classifier.py` (integrated version)
+2. **Signal Generation**
+   ```python
+   from strategies.LorentzianStrategy.generate_signals import generate_trading_signals
+   
+   # Generate signals using all models
+   signals = generate_trading_signals(data)
+   ```
 
-2. **Chandelier Exit implementations**:
-   - `indicators/chandelier_exit.py` (indicator version)
-   - `models/risk_management/chandelier_exit.py` (risk management version)
+3. **Risk Management**
+   ```python
+   from strategies.LorentzianStrategy.models.risk_management.chandelier_exit import ChandelierExit
+   
+   # Set up risk management
+   risk_manager = ChandelierExit()
+   exit_signals = risk_manager.calculate_exits(data, signals)
+   ```
 
-## 📊 How to Use
+## 🛠️ Common Usage Patterns
 
-For standalone backtesting and analysis:
+### 1. Standalone Backtesting
 ```python
 from strategies.LorentzianStrategy.integrated_ml_trader import IntegratedMLTrader
 
-# Create instance
+# Initialize the integrated system
 trader = IntegratedMLTrader()
 
-# Load data and calculate indicators
-df = prepare_data()
+# Load and prepare data
+data = trader.prepare_data(your_data)
 
-# Train models
-trader.train_models(df)
-
-# Generate signals
-signals = trader.generate_signals(df)
-
-# Backtest
-results = trader.backtest(signals)
-
-# Visualize
-trader.plot_results(results)
+# Run backtest
+results = trader.run_backtest(data)
 ```
 
-For use with Freqtrade:
+### 2. Live Trading with Freqtrade
 ```python
-# Import the wrapper
-from strategies.lorentzian_strategy import LorentzianStrategy
-
-# Freqtrade will handle the instantiation and execution
+# In your freqtrade config:
+"strategy": "LorentzianStrategy",
+"strategy_path": "/path/to/strategies/"
 ```
 
-## 🛠️ Development Workflow
+### 3. Model Training
+```python
+from strategies.LorentzianStrategy.models.primary.lorentzian_classifier import LorentzianClassifier
+from strategies.LorentzianStrategy.models.confirmation.logistic_regression_torch import LogisticRegressionModel
 
-1. Implement or modify indicators in the `indicators/` directory
-2. Update model implementations in the `models/` directory 
-3. Configure parameters in `config.py`
-4. Integrate components in `integrated_ml_trader.py`
-5. Test with standalone scripts before deploying to Freqtrade
+# Train primary model
+lorentzian = LorentzianClassifier()
+lorentzian.train(training_data)
 
-## 📈 Next Steps
+# Train confirmation model
+confirmation = LogisticRegressionModel()
+confirmation.train(training_data)
+```
 
-To create a fully integrated system with all three components, focus on:
+## 🔧 Configuration
 
-1. Ensuring all components follow consistent API patterns
-2. Using the configuration objects from `config.py`
-3. Testing each component individually before integration
-4. Verifying signal flow through the entire system
+Key configuration files and their purposes:
+
+1. `config.py`: Central configuration for all components
+   - Model parameters
+   - Indicator settings
+   - Trading thresholds
+
+2. `requirements.txt`: Project dependencies
+   - PyTorch
+   - Technical analysis libraries
+   - Data processing utilities
+
+## 📈 Development Workflow
+
+1. **Setup**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Testing Changes**
+   - Use `run_backtest.py` for quick validation
+   - Check signal generation with `generate_signals.py`
+   - Verify model saving/loading with `test_lorentzian_save.py`
+
+3. **Integration**
+   - Follow guidelines in `INTEGRATION.md`
+   - Test components individually
+   - Verify full system integration
+
+## 🔍 Troubleshooting Guide
+
+Common issues and solutions:
+
+1. **Model Loading Errors**
+   - Verify model file paths in `config.py`
+   - Check PyTorch version compatibility
+
+2. **Signal Generation Issues**
+   - Confirm all required indicators are calculated
+   - Verify data preprocessing steps
+
+3. **Performance Problems**
+   - Check indicator calculation efficiency
+   - Verify GPU utilization if available
+   - Monitor memory usage with large datasets
 
 ---
 
-*This document provides a high-level overview of the system structure. For implementation details, refer to the individual component files and documentation.* 
+*For detailed implementation information, refer to individual component documentation and docstrings within each file.* 
